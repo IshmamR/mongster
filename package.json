@@ -1,0 +1,19 @@
+{
+  "name": "mongster",
+  "version": "0.1.0",
+  "module": "index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "author": {
+    "name": "IshmamR",
+    "email": "ishmam785@gmail.com",
+    "url": "https://ishmam.dev"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
