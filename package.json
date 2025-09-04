@@ -1,19 +1,64 @@
 {
   "name": "mongster",
-  "version": "0.1.0",
-  "module": "index.ts",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "version": "0.0.1",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "type": "module",
-  "author": {
-    "name": "IshmamR",
-    "email": "ishmam785@gmail.com",
-    "url": "https://ishmam.dev"
+  "author": "IshmamR <ishmam785@gmail.com> (https://ishmam.dev)",
+  "dependencies": {
+    "bson": "^6.10.4",
+    "mongodb": "^6.19.0"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@biomejs/biome": "^2.2.2",
+    "@types/bun": "latest",
+    "prettier": "^3.6.2",
+    "typescript": "^5.5.0"
   },
   "peerDependencies": {
     "typescript": "^5"
-  }
+  },
+  "description": "A better MongoDB ODM",
+  "scripts": {
+    "test": "bun test",
+    "build:js": "bun run ./scripts/build.ts",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "build": "bun run build:js && bun run build:ts",
+    "clean": "rm -rf dist",
+    "dev": "bun --hot src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepublishOnly": "bun run clean && bun run build"
+  },
+  "keywords": [
+    "mongodb",
+    "mongo",
+    "odm",
+    "typesafe"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.2.20",
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ishmamR/mongster.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ishmamR/mongster/issues"
+  },
+  "homepage": "https://github.com/ishmamR/mongster#readme",
+  "license": "MIT"
 }
