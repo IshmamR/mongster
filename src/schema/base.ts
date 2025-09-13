@@ -225,6 +225,7 @@ export class MongsterSchema<
   ResolvedObj = Resolve<ObjectOutput<T>>,
 > extends MongsterSchemaBase<ResolvedObj> {
   declare $type: ResolvedObj;
+  declare $brand: "MongsterSchema";
 
   protected rootIndexes: IndexSpecification[] = [];
   protected options: MongsterSchemaOptions = {};

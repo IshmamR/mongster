@@ -50,7 +50,9 @@ export type IndexOptions<Coll> = {
 };
 export type SchemaMeta<Coll> = { index?: IndexDirection; options: IndexOptions<Coll> };
 
-export type WithTimestamps<O> = Prettify<O & { createdAt: Date; updatedAt: Date }>;
+type TimestampKeys = "createdAt" | "updatedAt";
+
+export type WithTimestamps<O> = Prettify<O & { [K in TimestampKeys]: Date }>;
 
 export type MongsterSchemaOptions = {
   withTimestamps?: boolean;
@@ -62,7 +64,9 @@ export type MongsterSchemaOptions = {
 export type InferSchemaType<MS extends MongsterSchemaBase<any>> = Prettify<
   { _id: ObjectId } & MS["$type"]
 >;
-export type InferSchemaInputType<MS extends MongsterSchemaBase<any>> = Pick<
-  MS["$type"],
-  Exclude<keyof MS["$type"], "createdAt" | "updatedAt">
->;
+
+type ContainsAll<T, U> = Exclude<U, T> extends never ? true : false;
+export type InferSchemaInputType<MS extends MongsterSchemaBase<any>> =
+  ContainsAll<keyof MS["$type"], TimestampKeys> extends true
+    ? Prettify<Omit<MS["$type"], TimestampKeys> & { [K in TimestampKeys]?: Date }>
+    : MS["$type"];

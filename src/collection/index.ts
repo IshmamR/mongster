@@ -1,5 +1,3 @@
-/** biome-ignore-all lint/suspicious/noExplicitAny: needed for inference */
-
 import type {
   CollectionOptions,
   Document,
@@ -11,14 +9,15 @@ import type {
   UpdateOptions,
 } from "mongodb";
 import { getDb } from "../connection";
-import type { InferSchemaType, MongsterSchema } from "../schema/rethink";
+import type { MongsterSchema } from "../schema/base";
+import type { InferSchemaInputType } from "../types/types.schema";
 
-class MongsterModel<
+export class MongsterCollection<
   CN extends string,
   SC extends MongsterSchema<any>,
-  T extends Document = InferSchemaType<SC>,
+  T extends Document = InferSchemaInputType<SC>,
 > {
-  declare _type: T;
+  declare $type: T;
 
   collectionName: CN;
   #schema: SC;
@@ -27,8 +26,6 @@ class MongsterModel<
   constructor(collectionName: CN, schema: SC) {
     this.collectionName = collectionName;
     this.#schema = schema;
-
-    // might compile and create the model here
   }
 
   async insertOne(input: OptionalUnlessRequiredId<T>, options?: InsertOneOptions) {
@@ -61,4 +58,4 @@ class MongsterModel<
   }
 }
 
-export default MongsterModel;
+export { MongsterCollection as MongsterModel };

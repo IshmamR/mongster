@@ -1,12 +1,11 @@
-/**
- * Yes, it is the error class
- */
-
 export interface MongsterIssue {
   path?: (string | number)[];
   message: string;
 }
 
+/**
+ * Yes, it is the error class
+ */
 export class MongsTerror extends Error {
   issues: MongsterIssue[];
 

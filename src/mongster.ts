@@ -1,14 +1,12 @@
 // biome-ignore-all lint/suspicious/noConsole: for testing
 /** biome-ignore-all lint/correctness/noUnusedVariables: for testing */
 
+import { MongsterCollection } from "./collection";
 import { ArraySchema, MongsterSchema, type MongsterSchemaBase } from "./schema/base";
 import { BinarySchema, Decimal128Schema, ObjectIdSchema } from "./schema/bsons";
 import { ObjectSchema, TupleSchema, UnionSchema } from "./schema/composites";
 import { BooleanSchema, DateSchema, NumberSchema, StringSchema } from "./schema/primitives";
 import type { InferSchemaInputType, InferSchemaType } from "./types/types.schema";
-
-// helper types for this file only
-type MSBAny = MongsterSchemaBase<any>;
 
 class MongsterSchemaBuilder {
   number() {
@@ -27,41 +25,41 @@ class MongsterSchemaBuilder {
    * Fixed-position array (tuple).
    * @params items
    */
-  tuple<T extends MSBAny[]>(...items: T) {
+  tuple<T extends MongsterSchemaBase<any>[]>(...items: T) {
     return new TupleSchema(items);
   }
   /**
    * Same thing as a `.tuple()` -> But takes the items as a single array
    */
-  fixedArrayOf<T extends MSBAny[]>(items: [...T]) {
+  fixedArrayOf<T extends MongsterSchemaBase<any>[]>(items: [...T]) {
     return new TupleSchema(items);
   }
   /**
    * An embedded document's schema representation
    * @param shape
    */
-  object<T extends Record<string, MSBAny>>(shape: T) {
+  object<T extends Record<string, MongsterSchemaBase<any>>>(shape: T) {
     return new ObjectSchema(shape);
   }
   /**
    * An array, it's in the name...
    * @param item
    */
-  array<T extends MSBAny>(item: T) {
+  array<T extends MongsterSchemaBase<any>>(item: T) {
     return new ArraySchema<T["$type"]>(item);
   }
   /**
    * Use whatever mixture of types/shapes you want. Mongo does not care, why should we ?
    * @param shapes
    */
-  union<T extends MSBAny[]>(...shapes: T) {
+  union<T extends MongsterSchemaBase<any>[]>(...shapes: T) {
     return new UnionSchema(shapes);
   }
   /**
    * Similar to `.union()` -> Only difference is it takes an array as param instead
    * @param shapes
    */
-  oneOf<T extends MSBAny[]>(shapes: [...T]) {
+  oneOf<T extends MongsterSchemaBase<any>[]>(shapes: [...T]) {
     return new UnionSchema(shapes);
   }
 
@@ -79,47 +77,35 @@ class MongsterSchemaBuilder {
    * A collection's schema representation
    * @param shape
    */
-  schema<T extends Record<string, MSBAny>>(shape: T) {
+  schema<T extends Record<string, MongsterSchemaBase<any>>>(shape: T) {
     return new MongsterSchema(shape);
   }
 }
 
-class Mongster {
-  // private schemas: MSBAny[] = [];
+export class Mongster {
+  private collectionSchemas: MongsterSchema<any>[] = [];
 
-  M = new MongsterSchemaBuilder();
-
-  // collection(name, schema) {
-  //  schemas.push(schema)
-  //  return new Collection()
-  // }
+  collection<CN extends string, SC extends MongsterSchema<any, any>>(
+    collectionName: CN,
+    schema: SC,
+  ) {
+    this.collectionSchemas.push(schema);
+    return new MongsterCollection(collectionName, schema);
+  }
 
   // connect(DB_URI: string) {}
 }
 
-const { M } = new Mongster();
+export const M = new MongsterSchemaBuilder();
 
-const addressSchema = M.object({
-  zip: M.string(),
-});
-const userSchema = new MongsterSchema({
-  username: M.string().unique(),
-  age: M.number().index(1),
-  address: addressSchema,
-  deep: M.object({
-    nested: M.object({
-      object: M.string().sparse().array(),
-    }).unique(),
-  }),
-})
-  .withTimestamps()
-  .createIndex({ username: 1 }, { unique: true })
-  .createIndex({ "address.zip": -1 })
-  .createIndex({ username: 1, age: -1 });
+export const mongster = new Mongster();
 
-console.time("Collect");
-console.log(userSchema.collectIndexes());
-console.timeEnd("Collect");
+export function collection<CN extends string, SC extends MongsterSchema<any, any>>(
+  name: CN,
+  schema: SC,
+) {
+  return mongster.collection<CN, SC>(name, schema);
+}
 
-type TUser = InferSchemaType<typeof userSchema>;
-type TUserInput = InferSchemaInputType<typeof userSchema>;
+export type InferOutput<S extends MongsterSchema<any, any>> = InferSchemaType<S>;
+export type InferInput<S extends MongsterSchema<any, any>> = InferSchemaInputType<S>;

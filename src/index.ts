@@ -1,4 +1,3 @@
+export * from "./collection";
 export * from "./connection";
-export * from "./model";
-export * from "./schema/old";
-export * from "./types/types";
+export * from "./schema";
