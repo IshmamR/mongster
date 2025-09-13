@@ -1,4 +1,4 @@
-import { collection, M, Mongster, mongster } from "../src/mongster";
+import { collection, M, Mongster, mongster } from "../src/index";
 import type { InferSchemaInputType, InferSchemaType } from "../src/types/types.schema";
 
 // 1. M.string()

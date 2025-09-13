@@ -8,7 +8,7 @@ import { ObjectSchema, TupleSchema, UnionSchema } from "./schema/composites";
 import { BooleanSchema, DateSchema, NumberSchema, StringSchema } from "./schema/primitives";
 import type { InferSchemaInputType, InferSchemaType } from "./types/types.schema";
 
-class MongsterSchemaBuilder {
+export class MongsterSchemaBuilder {
   number() {
     return new NumberSchema();
   }
@@ -94,17 +94,6 @@ export class Mongster {
   }
 
   // connect(DB_URI: string) {}
-}
-
-export const M = new MongsterSchemaBuilder();
-
-export const mongster = new Mongster();
-
-export function collection<CN extends string, SC extends MongsterSchema<any, any>>(
-  name: CN,
-  schema: SC,
-) {
-  return mongster.collection<CN, SC>(name, schema);
 }
 
 export type InferOutput<S extends MongsterSchema<any, any>> = InferSchemaType<S>;
