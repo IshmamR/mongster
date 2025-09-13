@@ -1,5 +1,5 @@
 import type { FindCursor } from "mongodb";
-import type { PositiveNumber } from "../../common/number";
+import type { PositiveNumber } from "../../types/types.common";
 import { limitFunc } from "./limit";
 import { projectFunc, type StrictProjection } from "./project";
 import { type SelectionFields, selectFunc } from "./select";

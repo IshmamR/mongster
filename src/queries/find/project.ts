@@ -1,6 +1,6 @@
 import type { FindCursor } from "mongodb";
-import type { BooleanNumber } from "../../common/number";
-import type { OmitFieldIfPresent, OmitFields, Prettify } from "../../common/record";
+import type { OmitFieldIfPresent, OmitFields, Prettify } from "../../types/record";
+import type { BooleanNumber } from "../../types/types.common";
 
 export type ProjectionShape<T> = Partial<Record<keyof T, BooleanNumber>> &
   Partial<Record<string, BooleanNumber>>;

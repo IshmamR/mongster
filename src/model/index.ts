@@ -3,7 +3,7 @@ import { getDb } from "../connection";
 import findDocuments, { type FindOptions } from "../queries/find";
 import type { Query } from "../queries/find/Query";
 import findSingleDocument, { type FindOneOptions } from "../queries/findOne";
-import type { InferSchemaType, SchemaDefinition } from "../schema";
+import type { InferSchemaType, SchemaDefinition } from "../schema/old";
 
 interface Model<T> {
   find: (filter: Filter<T>, opts?: FindOptions) => Query<WithId<T>>;

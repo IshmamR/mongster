@@ -29,6 +29,7 @@
 				"noDangerouslySetInnerHtml": "off"
 			},
 			"suspicious": {
+				"noExplicitAny": "off",
 				"noConsole": "error"
 			}
 		}

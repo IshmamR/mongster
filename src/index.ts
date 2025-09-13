@@ -1,4 +1,4 @@
-export * from "./common/types";
 export * from "./connection";
 export * from "./model";
-export * from "./schema";
+export * from "./schema/old";
+export * from "./types/types";

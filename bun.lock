@@ -4,7 +4,6 @@
     "": {
       "name": "mongster",
       "dependencies": {
-        "bson": "^6.10.4",
         "mongodb": "^6.19.0",
       },
       "devDependencies": {
@@ -12,6 +11,7 @@
         "@types/bun": "latest",
         "prettier": "^3.6.2",
         "typescript": "^5.5.0",
+        "zod": "^4.1.8",
       },
       "peerDependencies": {
         "typescript": "^5",
@@ -76,5 +76,7 @@
     "webidl-conversions": ["webidl-conversions@7.0.0", "", {}, "sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g=="],
 
     "whatwg-url": ["whatwg-url@14.2.0", "", { "dependencies": { "tr46": "^5.1.0", "webidl-conversions": "^7.0.0" } }, "sha512-De72GdQZzNTUBBChsXueQUnPKDkg/5A5zp7pFDuQAj5UFoENpiACU0wlCvzpAGnTkj++ihpKwKyYewn/XNUbKw=="],
+
+    "zod": ["zod@4.1.8", "", {}, "sha512-5R1P+WwQqmmMIEACyzSvo4JXHY5WiAFHRMg+zBZKgKS+Q1viRa0C1hmUKtHltoIFKtIdki3pRxkmpP74jnNYHQ=="],
   }
 }

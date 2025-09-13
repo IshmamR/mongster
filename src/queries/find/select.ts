@@ -1,6 +1,6 @@
 import type { FindCursor } from "mongodb";
-import type { BooleanNumber } from "../../common/number";
-import type { UnionToIntersection } from "../../common/record";
+import type { UnionToIntersection } from "../../types/record";
+import type { BooleanNumber } from "../../types/types.common";
 import type { ProjectedType, ProjectionShape } from "./project";
 
 type SingleSelection<T> = keyof T extends string ? keyof T | `-${keyof T}` : never;

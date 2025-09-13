@@ -17,6 +17,8 @@ export async function createConnection(url: string, options?: ConnectOptions) {
     await defaultClient.connect();
     defaultDb = defaultClient.db(dbName);
 
+    await defaultClient.db("admin").command({ ping: 1 });
+
     await defaultDb.command({ ping: 1 });
   } catch (err) {
     // console.log(err);
@@ -29,6 +31,8 @@ export async function createConnection(url: string, options?: ConnectOptions) {
 
 export async function closeConnection() {
   if (defaultClient) await defaultClient.close();
+  defaultClient = null;
+  defaultDb = null;
 }
 
 /**

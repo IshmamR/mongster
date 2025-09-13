@@ -1,5 +1,5 @@
 import type { Abortable, Collection, Filter, FindOptions as FOpts, WithId } from "mongodb";
-import type { InferSchemaType, SchemaDefinition } from "../../schema";
+import type { InferSchemaType, SchemaDefinition } from "../../schema/old";
 import { Query } from "./Query";
 
 export type FindOptions = FOpts & Abortable;

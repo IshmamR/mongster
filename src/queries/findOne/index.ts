@@ -1,5 +1,5 @@
 import type { Abortable, Collection, Filter, FindOneOptions as FOneOpts, WithId } from "mongodb";
-import type { InferSchemaType, SchemaDefinition } from "../../schema";
+import type { InferSchemaType, SchemaDefinition } from "../../schema/old";
 
 export type FindOneOptions = Omit<FOneOpts, "timeoutMode"> & Abortable;
 
