@@ -1,100 +1,100 @@
-// biome-ignore-all lint/suspicious/noConsole: for testing
-/** biome-ignore-all lint/correctness/noUnusedVariables: for testing */
-
+import { type Db, MongoClient, type MongoClientOptions } from "mongodb";
 import { MongsterCollection } from "./collection";
-import { ArraySchema, MongsterSchema, type MongsterSchemaBase } from "./schema/base";
-import { BinarySchema, Decimal128Schema, ObjectIdSchema } from "./schema/bsons";
-import { ObjectSchema, TupleSchema, UnionSchema } from "./schema/composites";
-import { BooleanSchema, DateSchema, NumberSchema, StringSchema } from "./schema/primitives";
-import type { InferSchemaInputType, InferSchemaType } from "./types/types.schema";
+import type { MongsterSchema } from "./schema/base";
 
-export class MongsterSchemaBuilder {
-  number() {
-    return new NumberSchema();
-  }
-  string() {
-    return new StringSchema();
-  }
-  boolean() {
-    return new BooleanSchema();
-  }
-  date() {
-    return new DateSchema();
-  }
-  /**
-   * Fixed-position array (tuple).
-   * @params items
-   */
-  tuple<T extends MongsterSchemaBase<any>[]>(...items: T) {
-    return new TupleSchema(items);
-  }
-  /**
-   * Same thing as a `.tuple()` -> But takes the items as a single array
-   */
-  fixedArrayOf<T extends MongsterSchemaBase<any>[]>(items: [...T]) {
-    return new TupleSchema(items);
-  }
-  /**
-   * An embedded document's schema representation
-   * @param shape
-   */
-  object<T extends Record<string, MongsterSchemaBase<any>>>(shape: T) {
-    return new ObjectSchema(shape);
-  }
-  /**
-   * An array, it's in the name...
-   * @param item
-   */
-  array<T extends MongsterSchemaBase<any>>(item: T) {
-    return new ArraySchema<T["$type"]>(item);
-  }
-  /**
-   * Use whatever mixture of types/shapes you want. Mongo does not care, why should we ?
-   * @param shapes
-   */
-  union<T extends MongsterSchemaBase<any>[]>(...shapes: T) {
-    return new UnionSchema(shapes);
-  }
-  /**
-   * Similar to `.union()` -> Only difference is it takes an array as param instead
-   * @param shapes
-   */
-  oneOf<T extends MongsterSchemaBase<any>[]>(shapes: [...T]) {
-    return new UnionSchema(shapes);
-  }
-
-  objectId() {
-    return new ObjectIdSchema();
-  }
-  decimal() {
-    return new Decimal128Schema();
-  }
-  binary() {
-    return new BinarySchema();
-  }
-
-  /**
-   * A collection's schema representation
-   * @param shape
-   */
-  schema<T extends Record<string, MongsterSchemaBase<any>>>(shape: T) {
-    return new MongsterSchema(shape);
-  }
+interface MongsterClientOptions extends MongoClientOptions {
+  retryConnection?: number;
+  retryDelayMs?: number;
 }
 
 export class Mongster {
-  private collectionSchemas: MongsterSchema<any>[] = [];
+  #uri: string | undefined;
+  #options: MongsterClientOptions | undefined;
+  #client: MongoClient | undefined;
+  #dbName: string | undefined;
+  #connected = false;
+
+  private collectionSchemas = new Map<string, MongsterSchema<any>>();
+
+  constructor(uri?: string, options?: MongsterClientOptions) {
+    this.#uri = uri;
+    this.#options = options;
+  }
 
   collection<CN extends string, SC extends MongsterSchema<any, any>>(
     collectionName: CN,
     schema: SC,
   ) {
-    this.collectionSchemas.push(schema);
-    return new MongsterCollection(collectionName, schema);
+    this.collectionSchemas.set(collectionName, schema);
+    return new MongsterCollection(this, collectionName, schema);
   }
 
-  // connect(DB_URI: string) {}
-}
+  async connect(uri?: string, options?: MongsterClientOptions): Promise<void> {
+    this.#uri = typeof uri !== "undefined" ? uri : this.#uri;
+    if (!this.#uri) throw new Error("No database URI was provided");
 
-export type InferOutput<S extends MongsterSchema<any, any>> = InferSchemaType<S>;
-export type InferInput<S extends MongsterSchema<any, any>> = InferSchemaInputType<S>;
+    this.#options = typeof options !== "undefined" ? options : this.#options;
+    const { retryConnection = 1, retryDelayMs = 200, ...mongoClientOptions } = this.#options ?? {};
+
+    let retryAttempt = 0;
+    let lastErr: unknown;
+
+    const maxAttempts = Math.max(1, retryConnection);
+    const baseDelay = Math.max(0, retryDelayMs);
+
+    do {
+      try {
+        const client = await MongoClient.connect(this.#uri, mongoClientOptions);
+        await client.db("admin").command({ ping: 1 });
+        this.#client = client;
+        this.#dbName = client.options.dbName;
+        this.#connected = true;
+        return;
+      } catch (err) {
+        this.#connected = false;
+        this.#client = undefined;
+        lastErr = err;
+        retryAttempt++;
+
+        if (retryAttempt >= maxAttempts) break;
+
+        const jitter = Math.floor(Math.random() * 100);
+        await new Promise((r) => setTimeout(r, baseDelay + jitter));
+      }
+    } while (!this.#connected && retryAttempt < maxAttempts);
+
+    if (lastErr instanceof Error) throw lastErr;
+    throw new Error("Failed to connect to database");
+  }
+
+  async disconnect(): Promise<void> {
+    if (!this.#client) return;
+    await this.#client.close();
+    this.#connected = false;
+    this.#client = undefined;
+  }
+
+  async ping(): Promise<boolean> {
+    if (!this.#client) return false;
+    try {
+      await this.#client.db("admin").command({ ping: 1 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  isConnected(): boolean {
+    return this.#connected;
+  }
+
+  getClient(): MongoClient {
+    if (!this.#client) throw new Error("Not connected");
+    return this.#client;
+  }
+
+  getDb(name?: string): Db {
+    if (!this.#client) throw new Error("Not connected");
+    return this.#client.db(name ?? this.#dbName ?? "test");
+  }
+}

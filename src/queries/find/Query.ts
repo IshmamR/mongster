@@ -1,60 +1,95 @@
-import type { FindCursor } from "mongodb";
-import type { PositiveNumber } from "../../types/types.common";
-import { limitFunc } from "./limit";
-import { projectFunc, type StrictProjection } from "./project";
-import { type SelectionFields, selectFunc } from "./select";
-import { skipFunc } from "./skip";
-import { type SchemaSort, sortFunc } from "./sort";
+import type { FindCursor, Sort } from "mongodb";
+import type { BooleanNumber } from "../../types/types.common";
+import type {
+  AllKeys,
+  ProjectExclusion,
+  ProjectInclusion,
+  SchemaSort,
+} from "../../types/types.query";
 
 type PromiseOnFulfilled<Res> = ((value: Res[]) => Res[] | PromiseLike<Res[]>) | null | undefined;
 type PromiseOnRejected = ((reason: unknown) => PromiseLike<never>) | null | undefined;
 
-export class Query<T> {
-  #cursor: FindCursor<T>;
+export class Query<T, OT> {
+  #cursor: FindCursor<OT>;
 
-  constructor(cursor: FindCursor<T>) {
+  projection?: Partial<Record<AllKeys<OT>, BooleanNumber>>;
+
+  constructor(cursor: FindCursor<OT>, projection?: typeof this.projection) {
     this.#cursor = cursor;
+    this.projection = projection;
   }
 
   sort(sort: SchemaSort<T>) {
-    this.#cursor = sortFunc(this.#cursor, sort);
+    this.#cursor = this.#cursor.sort(sort as Sort);
     return this;
   }
 
-  limit<N extends number>(n: PositiveNumber<N>) {
-    this.#cursor = limitFunc(this.#cursor, n);
+  limit(n: number) {
+    if (typeof n !== "number" || !Number.isInteger(n) || n <= 0) {
+      throw new Error("Limit must be a positive integer");
+    }
+    this.#cursor = this.#cursor.limit(n);
     return this;
   }
 
-  skip<N extends number>(n: PositiveNumber<N>) {
-    this.#cursor = skipFunc(this.#cursor, n);
+  skip(n: number) {
+    if (typeof n !== "number" || !Number.isInteger(n) || n <= 0) {
+      throw new Error("Skip must be a positive integer");
+    }
+    this.#cursor = this.#cursor.skip(n);
     return this;
   }
 
-  project<P extends StrictProjection<T>>(projection: P) {
-    const projectedCursor = projectFunc(this.#cursor, projection);
-    return new Query(projectedCursor);
+  include<K extends AllKeys<OT>>(paths: K[]) {
+    for (const path of paths) {
+      if (typeof this.projection !== "undefined") {
+        this.projection[path] = 1;
+      } else {
+        this.projection = { [path]: 1 } as Partial<Record<AllKeys<OT>, 1>>;
+      }
+    }
+    return new Query(this.#cursor, this.projection) as Query<T, ProjectInclusion<OT, K>>;
   }
 
-  /**
-   * example usages:
-   * .select(["age", name"]) , .select(["-dob"])
-   */
-  select<SF extends SelectionFields<T>>(fields: SF) {
-    const projectedCursor = selectFunc(this.#cursor, fields);
-    return new Query(projectedCursor);
+  exclude<K extends AllKeys<OT>>(paths: K[]) {
+    for (const path of paths) {
+      if (typeof this.projection !== "undefined") {
+        this.projection[path] = 0;
+      } else {
+        this.projection = { [path]: 0 } as Partial<Record<AllKeys<OT>, 0>>;
+      }
+    }
+    return new Query(this.#cursor, this.projection) as Query<T, ProjectExclusion<OT, K>>;
   }
 
-  exec() {
+  project<ReturnType = OT>(projection: { [K in AllKeys<OT>]?: any }) {
+    if (typeof this.projection !== "undefined") {
+      this.projection = { ...this.projection, projection };
+    } else {
+      this.projection = projection as Partial<Record<AllKeys<OT>, any>>;
+    }
+
+    return new Query(this.#cursor, this.projection) as unknown as Query<T, ReturnType>;
+  }
+
+  exec(): Promise<OT[]> {
+    if (typeof this.projection !== "undefined") {
+      this.#cursor = this.#cursor.project(this.projection) as FindCursor<OT>;
+    }
     return this.#cursor.toArray();
   }
 
   // biome-ignore lint/suspicious/noThenProperty: cz I need it
-  then(resolve?: PromiseOnFulfilled<T>, reject?: PromiseOnRejected) {
+  then(resolve?: PromiseOnFulfilled<OT>, reject?: PromiseOnRejected) {
     return this.exec().then(resolve, reject);
   }
 
   catch(reject: PromiseOnRejected) {
     return this.exec().catch(reject);
+  }
+
+  async explain(): Promise<any> {
+    return this.#cursor.explain();
   }
 }

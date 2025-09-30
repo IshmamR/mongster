@@ -7,7 +7,8 @@
   "type": "module",
   "author": "IshmamR <ishmam785@gmail.com> (https://ishmam.dev)",
   "dependencies": {
-    "mongodb": "^6.19.0"
+    "mongodb": "^6.19.0",
+    "vitest": "^3.2.4"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.2",

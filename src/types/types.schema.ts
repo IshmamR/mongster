@@ -6,6 +6,9 @@ import type { Prettify } from "./types.common";
 export type Primitives = string | number | boolean;
 export type Builtins = Primitives | Date | Buffer;
 export type BsonTypes = ObjectId | Decimal128 | Double | Binary | Int32;
+export type Nullish = null | undefined;
+
+export type NoExpandType = Builtins | BsonTypes | Nullish;
 
 type _InferSchema<T> = T extends MongsterSchemaBase<infer U> ? U : never;
 
@@ -62,7 +65,7 @@ export type MongsterSchemaOptions = {
  * Infer the type from any given mongster schema
  */
 export type InferSchemaType<MS extends MongsterSchemaBase<any>> = Prettify<
-  { _id: ObjectId } & MS["$type"]
+  MS["$type"] extends Record<"_id", any> ? MS["$type"] : { _id: ObjectId } & MS["$type"]
 >;
 
 type ContainsAll<T, U> = Exclude<U, T> extends never ? true : false;
