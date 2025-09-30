@@ -1,5 +1,5 @@
 import { collection, defineSchema, M, Mongster, mongster } from "../src/index";
-import type { AllKeys } from "../src/queries/find/types";
+import type { AllKeys } from "../src/types/types.query";
 import type { InferSchemaInputType, InferSchemaType } from "../src/types/types.schema";
 
 // 1. M.string()
@@ -38,9 +38,9 @@ const list = await User.find({ age: { $gt: 18 } })
   // .skip(10)
   // .limit(10)
   // .sort({ socials: 1 })
-  // .include(["socials.link"])
-  // .exclude(["age"]);
-  .project({ "nested.l1": 1 });
+  .include([""]);
+// .exclude(["age"]);
+// .project({ "nested.l1": 1 });
 
 // 4. mongster.collection(name, schema)
 mongster.collection("accounts", userSchema);

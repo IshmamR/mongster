@@ -43,6 +43,7 @@ export class Query<T, OT> {
 
   include<K extends AllKeys<OT>>(paths: K[]) {
     for (const path of paths) {
+      if (path === "") continue;
       if (typeof this.projection !== "undefined") {
         this.projection[path] = 1;
       } else {
@@ -54,6 +55,7 @@ export class Query<T, OT> {
 
   exclude<K extends AllKeys<OT>>(paths: K[]) {
     for (const path of paths) {
+      if (path === "") continue;
       if (typeof this.projection !== "undefined") {
         this.projection[path] = 0;
       } else {
@@ -65,7 +67,7 @@ export class Query<T, OT> {
 
   project<ReturnType = OT>(projection: { [K in AllKeys<OT>]?: any }) {
     if (typeof this.projection !== "undefined") {
-      this.projection = { ...this.projection, projection };
+      this.projection = { ...this.projection, ...projection };
     } else {
       this.projection = projection as Partial<Record<AllKeys<OT>, any>>;
     }
