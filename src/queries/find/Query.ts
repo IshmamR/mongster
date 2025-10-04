@@ -1,9 +1,9 @@
 import type { FindCursor, Sort } from "mongodb";
-import type { BooleanNumber } from "../../types/types.common";
 import type {
-  AllKeys,
-  ProjectExclusion,
-  ProjectInclusion,
+  AllProjKeys,
+  ProjectionFromExclusionKeys,
+  ProjectionFromInclusionKeys,
+  ProjectionRecord,
   SchemaSort,
 } from "../../types/types.query";
 
@@ -13,11 +13,15 @@ type PromiseOnRejected = ((reason: unknown) => PromiseLike<never>) | null | unde
 export class Query<T, OT> {
   #cursor: FindCursor<OT>;
 
-  projection?: Partial<Record<AllKeys<OT>, BooleanNumber>>;
+  projection?: ProjectionRecord<OT>;
 
   constructor(cursor: FindCursor<OT>, projection?: typeof this.projection) {
     this.#cursor = cursor;
     this.projection = projection;
+  }
+
+  getCursor() {
+    return this.#cursor;
   }
 
   sort(sort: SchemaSort<T>) {
@@ -41,38 +45,40 @@ export class Query<T, OT> {
     return this;
   }
 
-  include<K extends AllKeys<OT>>(paths: K[]) {
+  include<K extends AllProjKeys<OT>>(paths: K[]) {
     for (const path of paths) {
       if (path === "") continue;
       if (typeof this.projection !== "undefined") {
         this.projection[path] = 1;
       } else {
-        this.projection = { [path]: 1 } as Partial<Record<AllKeys<OT>, 1>>;
+        this.projection = { [path]: 1 } as { [IK in AllProjKeys<OT>]: 1 };
       }
     }
-    return new Query(this.#cursor, this.projection) as Query<T, ProjectInclusion<OT, K>>;
+
+    return this as Query<T, ProjectionFromInclusionKeys<OT, K>>;
   }
 
-  exclude<K extends AllKeys<OT>>(paths: K[]) {
+  exclude<K extends AllProjKeys<OT>>(paths: K[]) {
     for (const path of paths) {
       if (path === "") continue;
       if (typeof this.projection !== "undefined") {
         this.projection[path] = 0;
       } else {
-        this.projection = { [path]: 0 } as Partial<Record<AllKeys<OT>, 0>>;
+        this.projection = { [path]: 0 } as { [EK in AllProjKeys<OT>]: 0 };
       }
     }
-    return new Query(this.#cursor, this.projection) as Query<T, ProjectExclusion<OT, K>>;
+
+    return this as Query<T, ProjectionFromExclusionKeys<OT, K>>;
   }
 
-  project<ReturnType = OT>(projection: { [K in AllKeys<OT>]?: any }) {
+  project<ReturnType = OT>(projection: ProjectionRecord<OT>) {
     if (typeof this.projection !== "undefined") {
       this.projection = { ...this.projection, ...projection };
     } else {
-      this.projection = projection as Partial<Record<AllKeys<OT>, any>>;
+      this.projection = projection;
     }
 
-    return new Query(this.#cursor, this.projection) as unknown as Query<T, ReturnType>;
+    return this as unknown as Query<T, ReturnType>;
   }
 
   exec(): Promise<OT[]> {

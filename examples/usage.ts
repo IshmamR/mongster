@@ -1,5 +1,6 @@
-import { collection, defineSchema, M, Mongster, mongster } from "../src/index";
-import type { AllKeys } from "../src/types/types.query";
+import { defineSchema, M, Mongster, model, mongster } from "../src/index";
+import type { PropertyType } from "../src/types/types.filter";
+import type { AllFilterKeys, AllProjKeys } from "../src/types/types.query";
 import type { InferSchemaInputType, InferSchemaType } from "../src/types/types.schema";
 
 // 1. M.string()
@@ -15,32 +16,45 @@ const userSchema = defineSchema({
   age: M.number().index(1),
   nested: M.object({
     l1: M.number(),
+    l2: M.string(),
+    l3: M.array(
+      M.object({
+        m1: M.string(),
+      }),
+    ),
   }).optional(),
   socials: M.object({ link: M.string(), site: M.string() }).array().optional(),
   anotherId: M.objectId().optional(),
 }).withTimestamps();
 
 // 3. collection(name, schema)
-const User = collection("users", userSchema);
+const User = model("users", userSchema);
 
 type TUser = InferSchemaType<typeof userSchema>;
 type TUserInput = InferSchemaInputType<typeof userSchema>;
 
+type TestFilterKeys = AllFilterKeys<TUser>;
+type TestProjKeys = AllProjKeys<TUser>;
+
 const result = await User.create({
-  // _id: 234,
   age: 1,
   name: "promethewz",
 });
 
-type TT = AllKeys<TUser>;
-
-const list = await User.find({ age: { $gt: 18 } })
+const list = await User.find({ age: { $eq: 1 } })
   // .skip(10)
   // .limit(10)
   // .sort({ socials: 1 })
-  .include([""]);
+  .include(["socials.site", "nested.l3.m1"]);
+// .project({ "socials.$.link": 0 });
+// .exclude(["_id"]);
 // .exclude(["age"]);
 // .project({ "nested.l1": 1 });
+
+User.updateOne({}, { $set: { "socials.link": "" } });
+
+type Test = PropertyType<TUser, "nested.l3.m1">;
+//   ^?
 
 // 4. mongster.collection(name, schema)
 mongster.collection("accounts", userSchema);

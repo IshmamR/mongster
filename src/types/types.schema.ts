@@ -18,7 +18,7 @@ export type ResolveTuple<T extends readonly unknown[]> = T extends readonly []
     ? readonly [Resolve<H>, ...ResolveTuple<R>]
     : never;
 
-export type Resolve<T> = T extends Builtins | BsonTypes
+export type Resolve<T> = T extends NoExpandType
   ? T
   : T extends readonly [unknown, ...unknown[]]
     ? ResolveTuple<T> // fixed tuple

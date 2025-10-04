@@ -1,35 +1,46 @@
 import type { SortDirection } from "mongodb";
-import type { Prettify, UnionToIntersection } from "./types.common";
+import type { BooleanNumber, Prettify, UnionToIntersection } from "./types.common";
 import type { NoExpandType } from "./types.schema";
 
-type Inc = [1, 2, 3, 4, 5, 6, 7, 8, 8];
+type MaxDepth = 6;
+type Depth = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+type DepthInc = [1, 2, 3, 4, 5, 6, 6];
 
 /**
- * Generate typed keys for a given object (yes, even nested ones with arrays)
+ * Generate typed keys for a given object
  */
 export type DotSeparatedKeys<
   T,
-  P extends string = "",
-  D extends 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 = 0,
-> = D extends 7
-  ? P
+  IncProjKey extends boolean = false,
+  Path extends string = "",
+  D extends Depth = 0,
+> = D extends MaxDepth
+  ? Path
   : T extends NoExpandType
-    ? P
+    ? Path
     : T extends (infer E)[]
       ? E extends NoExpandType
-        ? P
-        : P | DotSeparatedKeys<E, P, Inc[D]>
+        ? Path
+        :
+            | (Path extends "" ? never : Path)
+            | `${Path}.${number}`
+            | `${Path}.${number}.${DotSeparatedKeys<E, IncProjKey, "", DepthInc[D]>}`
+            | (IncProjKey extends true
+                ? `${Path}.$` | `${Path}.$.${DotSeparatedKeys<E, IncProjKey, "", DepthInc[D]>}`
+                : never)
+            | DotSeparatedKeys<E, IncProjKey, Path, DepthInc[D]>
       : T extends object
         ?
-            | P
+            | (Path extends "" ? never : Path)
             | {
-                [K in keyof T & string]: `${P}${P extends "" ? "" : "."}${K}` extends infer NK
-                  ? NK extends string
-                    ? DotSeparatedKeys<T[K], NK, Inc[D]>
-                    : never
-                  : never;
+                [K in keyof T & string]: DotSeparatedKeys<
+                  T[K],
+                  IncProjKey,
+                  Path extends "" ? K : K extends "" ? Path : `${Path}.${K}`,
+                  DepthInc[D]
+                >;
               }[keyof T & string]
-        : P;
+        : Path;
 
 export type SanitizedSortDirection = Exclude<SortDirection, { readonly $meta: string }>;
 export type SchemaSort<T> =
@@ -42,12 +53,22 @@ export type SchemaSort<T> =
         | [DotSeparatedKeys<T>, SanitizedSortDirection]
     : never;
 
-export type Head<Path> = Path extends `${infer H}.${string}` ? H : Path;
-export type Tail<Path> = Path extends `${string}.${infer T}` ? T : never;
+type Head<Path> = Path extends `${infer H}.${string}` ? H : Path;
+type Tail<Path> = Path extends `${string}.${infer T}`
+  ? T extends `${number}.${infer TT}`
+    ? TT
+    : T
+  : never;
 
-export type IsOptional<T, K extends keyof T> = object extends Pick<T, K> ? true : false;
+type IsOptional<T, K extends keyof T> = object extends Pick<T, K> ? true : false;
 
-export type AllKeys<T> = keyof T | DotSeparatedKeys<T>;
+type AllFilterKeysBase<T> = keyof T | DotSeparatedKeys<T>;
+type AllProjKeysBase<T> = keyof T | DotSeparatedKeys<T, true>;
+
+type StripTrailingDots<K> = K extends `${string}.` ? never : K;
+
+export type AllFilterKeys<T> = StripTrailingDots<AllFilterKeysBase<T>>;
+export type AllProjKeys<T> = StripTrailingDots<AllProjKeysBase<T>>;
 
 type ProjectIncBase<T, Path extends string> =
   Head<Path> extends keyof T
@@ -59,14 +80,18 @@ type ProjectIncBase<T, Path extends string> =
           : { [K in Head<Path>]: ProjectIncBase<U, Tail<Path>>[] }
         : NonNullable<T[Head<Path>]> extends object
           ? IsOptional<T, Head<Path>> extends true
-            ? { [K in Head<Path>]?: ProjectIncBase<NonNullable<T[Head<Path>]>, Tail<Path>> }
-            : { [K in Head<Path>]: ProjectIncBase<NonNullable<T[Head<Path>]>, Tail<Path>> }
+            ? {
+                [K in Head<Path>]?: ProjectIncBase<NonNullable<T[Head<Path>]>, Tail<Path>>;
+              }
+            : {
+                [K in Head<Path>]: ProjectIncBase<NonNullable<T[Head<Path>]>, Tail<Path>>;
+              }
           : never
     : never;
 
-export type ProjectInclusion<T, Path extends AllKeys<T>> = Prettify<
+export type ProjectionFromInclusionKeys<T, Path extends AllProjKeys<T>> = Prettify<
   UnionToIntersection<Path extends string ? ProjectIncBase<T, Path> : never> &
-    (T extends { _id: NonNullable<any> } ? { _id: T["_id"] } : never)
+    (T extends { _id: NonNullable<any> } ? { _id: T["_id"] } : object)
 >;
 
 // builds a full path: Prefix="" -> "K", else "Prefix.K"
@@ -99,7 +124,15 @@ type ProjectExcBase<T, Excluded extends string, Prefix extends string = ""> = T 
           : T[K];
     }>;
 
-export type ProjectExclusion<T, Paths extends AllKeys<T>> = ProjectExcBase<
+export type ProjectionFromExclusionKeys<T, Paths extends AllProjKeys<T>> = ProjectExcBase<
   T,
   Paths extends string ? Paths : never
 >;
+
+export type ProjectionRecord<T> = {
+  [K in AllProjKeys<T>]?:
+    | BooleanNumber
+    | { $slice: number | [number, number] }
+    | { $elemMatch: Record<keyof T, any> }
+    | { $meta: string };
+};

@@ -9,7 +9,7 @@ interface MongsterClientOptions extends MongoClientOptions {
 
 export class Mongster {
   #uri: string | undefined;
-  #options: MongsterClientOptions | undefined;
+  #options: MongsterClientOptions = {};
   #client: MongoClient | undefined;
   #dbName: string | undefined;
   #connected = false;
@@ -18,7 +18,7 @@ export class Mongster {
 
   constructor(uri?: string, options?: MongsterClientOptions) {
     this.#uri = uri;
-    this.#options = options;
+    this.#options = options ?? {};
   }
 
   collection<CN extends string, SC extends MongsterSchema<any, any>>(
@@ -29,12 +29,19 @@ export class Mongster {
     return new MongsterCollection(this, collectionName, schema);
   }
 
+  /**
+   * Alias to `.collection()`
+   */
+  model<CN extends string, SC extends MongsterSchema<any, any>>(collectionName: CN, schema: SC) {
+    return this.collection(collectionName, schema);
+  }
+
   async connect(uri?: string, options?: MongsterClientOptions): Promise<void> {
     this.#uri = typeof uri !== "undefined" ? uri : this.#uri;
     if (!this.#uri) throw new Error("No database URI was provided");
 
-    this.#options = typeof options !== "undefined" ? options : this.#options;
-    const { retryConnection = 1, retryDelayMs = 200, ...mongoClientOptions } = this.#options ?? {};
+    this.#options = { ...this.#options, ...options };
+    const { retryConnection = 1, retryDelayMs = 200, ...mongoClientOptions } = this.#options;
 
     let retryAttempt = 0;
     let lastErr: unknown;
@@ -94,7 +101,7 @@ export class Mongster {
   }
 
   getDb(name?: string): Db {
-    if (!this.#client) throw new Error("Not connected");
+    if (!this.#client) throw new Error("DB not connected");
     return this.#client.db(name ?? this.#dbName ?? "test");
   }
 }

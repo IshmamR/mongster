@@ -52,3 +52,8 @@ export type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) ex
 ) => void
   ? I
   : never;
+
+export type OptionalKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? K : never }[keyof T];
+export type RequiredKeys<T> = Exclude<keyof T, OptionalKeys<T>>;
+
+export type Merge<T> = { [K in keyof T]: T[K] };

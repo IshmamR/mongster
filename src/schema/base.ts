@@ -1,7 +1,7 @@
 import type { Filter, IndexSpecification } from "mongodb";
 import { MongsTerror } from "../error";
 import type { PositiveNumber } from "../types/types.common";
-import type { DotSeparatedKeys } from "../types/types.query";
+import type { AllFilterKeys } from "../types/types.query";
 import type {
   IndexDirection,
   IndexOptions,
@@ -244,7 +244,7 @@ export class MongsterSchema<
     return proxySchema;
   }
 
-  createIndex<K extends DotSeparatedKeys<ResolvedObj>>(
+  createIndex<K extends AllFilterKeys<ResolvedObj>>(
     keys: Record<K, 1 | -1 | "text" | "hashed">,
     options?: IndexOptions<ResolvedObj>,
   ): this {
