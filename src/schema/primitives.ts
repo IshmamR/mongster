@@ -20,23 +20,23 @@ export class NumberSchema<TP extends number = number> extends MongsterSchemaBase
   }
 
   min(n: number): NumberSchema<TP> {
-    this.#checks.min = n;
-    return this;
+    return new NumberSchema<TP>({ ...this.#checks, min: n });
   }
 
   max(n: number): NumberSchema<TP> {
-    this.#checks.max = n;
-    return this;
+    return new NumberSchema<TP>({ ...this.#checks, max: n });
   }
 
   enum<E extends TP>(e: E[]): NumberSchema<E> {
-    this.#checks.enum = e;
-    return this as unknown as NumberSchema<E>;
+    return new NumberSchema({ ...this.#checks, enum: e }) as unknown as NumberSchema<E>;
   }
 
   default(d: TP): NumberSchema<TP> {
-    this.#checks.default = d;
-    return this;
+    return new NumberSchema<TP>({ ...this.#checks, default: d });
+  }
+
+  clone(): this {
+    return new NumberSchema<TP>({ ...this.#checks }) as this;
   }
 
   parse(v: unknown): TP {
@@ -85,28 +85,27 @@ export class StringSchema<TP extends string = string> extends MongsterSchemaBase
   }
 
   min(n: number): StringSchema<TP> {
-    this.#checks.min = n;
-    return this;
+    return new StringSchema<TP>({ ...this.#checks, min: n });
   }
 
   max(n: number): StringSchema<TP> {
-    this.#checks.max = n;
-    return this;
+    return new StringSchema<TP>({ ...this.#checks, max: n });
   }
 
   enum<E extends TP>(e: E[]): StringSchema<E> {
-    this.#checks.enum = e;
-    return this as unknown as StringSchema<E>;
+    return new StringSchema({ ...this.#checks, enum: e }) as unknown as StringSchema<E>;
   }
 
   match(r: RegExp): StringSchema<TP> {
-    this.#checks.match = r;
-    return this;
+    return new StringSchema<TP>({ ...this.#checks, match: r });
   }
 
   default(d: TP): StringSchema<TP> {
-    this.#checks.default = d;
-    return this;
+    return new StringSchema<TP>({ ...this.#checks, default: d });
+  }
+
+  clone(): this {
+    return new StringSchema<TP>({ ...this.#checks }) as this;
   }
 
   parse(v: unknown): TP {
@@ -156,8 +155,11 @@ export class BooleanSchema extends MongsterSchemaBase<boolean> {
   }
 
   default(d: boolean): BooleanSchema {
-    this.#checks.default = d;
-    return this;
+    return new BooleanSchema({ ...this.#checks, default: d });
+  }
+
+  clone(): this {
+    return new BooleanSchema({ ...this.#checks }) as this;
   }
 
   parse(v: unknown): boolean {
@@ -193,18 +195,19 @@ export class DateSchema extends MongsterSchemaBase<Date> {
   }
 
   min(d: Date): DateSchema {
-    this.#checks.min = d;
-    return this;
+    return new DateSchema({ ...this.#checks, min: d });
   }
 
   max(d: Date): DateSchema {
-    this.#checks.max = d;
-    return this;
+    return new DateSchema({ ...this.#checks, max: d });
   }
 
   default(d: Date): DateSchema {
-    this.#checks.default = d;
-    return this;
+    return new DateSchema({ ...this.#checks, default: d });
+  }
+
+  clone(): this {
+    return new DateSchema({ ...this.#checks }) as this;
   }
 
   parse(v: unknown): Date {
@@ -242,13 +245,14 @@ export class DateSchema extends MongsterSchemaBase<Date> {
    * @param s The TTL index expireAfterSeconds value
    */
   ttl(s: number): DateSchema {
+    const clone = this.clone();
     const currMeta = this.getMeta();
     const newMeta: SchemaMeta<Date> = {
       options: { ...currMeta.options, expireAfterSeconds: s },
       index: currMeta.index ?? 1,
     };
-    this.setMeta(newMeta);
-    return this;
+    clone.setMeta(newMeta);
+    return clone;
   }
 
   /**

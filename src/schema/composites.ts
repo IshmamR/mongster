@@ -1,68 +1,60 @@
 import { MError } from "../error";
-import type { ObjectOutput, Resolve, ResolveTuple, WithTimestamps } from "../types/types.schema";
+import type { ObjectOutput, Resolve, ResolveTuple } from "../types/types.schema";
 import { MongsterSchemaBase } from "./base";
 
-type ObjectChecks<DO> = {
-  default?: DO;
-
-  withTimestamps?: boolean;
-};
+interface ObjectChecks<O> {
+  default?: O;
+}
 
 export class ObjectSchema<
   T extends Record<string, MongsterSchemaBase<any>>,
-  ResolvedObj = Resolve<ObjectOutput<T>>,
-> extends MongsterSchemaBase<ResolvedObj> {
-  declare $type: ResolvedObj;
+  $T = Resolve<ObjectOutput<T>>,
+> extends MongsterSchemaBase<$T> {
+  declare $type: $T;
 
-  constructor(
-    protected shape: T,
-    private checks: ObjectChecks<ResolvedObj> = {},
-  ) {
+  #shape: T;
+  #checks: ObjectChecks<$T>;
+
+  constructor(shape: T, checks: ObjectChecks<$T> = {}) {
     super();
+    this.#shape = shape;
+    this.#checks = checks;
   }
 
-  protected clone(): this {
-    return new ObjectSchema(this.shape, this.checks) as this;
+  default(o: $T): ObjectSchema<T, $T> {
+    return new ObjectSchema(this.#shape, { ...this.#checks, default: o });
   }
 
-  default(obj: ResolvedObj): ObjectSchema<T, ResolvedObj> {
-    return new ObjectSchema(this.shape, { ...this.checks, default: obj });
+  clone(): this {
+    return new ObjectSchema(this.#shape, { ...this.#checks }) as this;
   }
 
-  withTimestamps(): ObjectSchema<T, WithTimestamps<ResolvedObj>> {
-    return new ObjectSchema<T, WithTimestamps<ResolvedObj>>(this.shape, {
-      ...(this.checks as ObjectChecks<WithTimestamps<ResolvedObj>>),
-      withTimestamps: true,
-    });
-  }
-
-  parse(v: unknown): ResolvedObj {
-    if (typeof v === "undefined" && typeof this.checks.default !== "undefined") {
-      return this.checks.default;
+  parse(v: unknown): $T {
+    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
+      return this.#checks.default;
     }
 
     if (typeof v !== "object") throw new MError("Expected an object");
     if (Array.isArray(v)) throw new MError("Expected an object, but received an array");
 
-    const out: any = {};
-
-    for (const [k, s] of Object.entries(this.shape)) {
+    const out: Record<string, unknown> = {};
+    for (const [k, s] of Object.entries(this.#shape)) {
       try {
         out[k] = (s as MongsterSchemaBase<any>).parse((v as any)[k]);
       } catch (err) {
-        throw new MError(`${k}: ${(err as Error).message}`, {
+        throw new MError(`${k}: ${(err as MError).message}`, {
           cause: err,
         });
       }
     }
 
-    return out as ResolvedObj;
+    return out as $T;
   }
 }
 
-type UnionChecks<DU> = {
-  default?: DU;
-};
+interface UnionChecks<U> {
+  default?: U;
+}
 
 export class UnionSchema<
   T extends MongsterSchemaBase<any>[],
@@ -70,28 +62,30 @@ export class UnionSchema<
 > extends MongsterSchemaBase<$T> {
   declare $type: $T;
 
-  constructor(
-    private shapes: T,
-    private checks: UnionChecks<$T> = {},
-  ) {
-    super();
-  }
+  #shapes: T;
+  #checks: UnionChecks<$T>;
 
-  protected clone(): this {
-    return new UnionSchema(this.shapes, this.checks) as this;
+  constructor(shapes: T, checks: UnionChecks<$T> = {}) {
+    super();
+    this.#shapes = shapes;
+    this.#checks = checks;
   }
 
   default(d: $T): UnionSchema<T> {
-    return new UnionSchema(this.shapes, { ...this.checks, default: d });
+    return new UnionSchema(this.#shapes, { ...this.#checks, default: d });
+  }
+
+  clone(): this {
+    return new UnionSchema(this.#shapes, { ...this.#checks }) as this;
   }
 
   parse(v: unknown): $T {
-    if (typeof v === "undefined" && typeof this.checks.default !== "undefined") {
-      return this.checks.default;
+    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
+      return this.#checks.default;
     }
 
     let isValid = false;
-    for (const shape of this.shapes) {
+    for (const shape of this.#shapes) {
       try {
         v = shape.parse(v);
         isValid = true;
@@ -101,7 +95,7 @@ export class UnionSchema<
 
     if (!isValid) {
       throw new MError(
-        `Expected one of: ${this.shapes.map((shape) => (shape.constructor as any).name).join(" | ")}`,
+        `Expected one of: ${this.#shapes.map((shape) => shape.constructor.name).join(" | ")}`,
       );
     }
 
@@ -109,9 +103,9 @@ export class UnionSchema<
   }
 }
 
-type TupleChecks<DT> = {
-  default?: DT;
-};
+interface TupleChecks<T> {
+  default?: T;
+}
 
 export class TupleSchema<
   T extends MongsterSchemaBase<any>[],
@@ -121,44 +115,44 @@ export class TupleSchema<
 > extends MongsterSchemaBase<$T> {
   declare $type: $T;
 
-  constructor(
-    private shapes: T,
-    private checks: TupleChecks<$T> = {},
-  ) {
-    super();
-  }
+  #shapes: T;
+  #checks: TupleChecks<$T>;
 
-  protected clone(): this {
-    return new TupleSchema(this.shapes, this.checks) as this;
+  constructor(shapes: T, checks: TupleChecks<$T> = {}) {
+    super();
+    this.#shapes = shapes;
+    this.#checks = checks;
   }
 
   default(d: $T): TupleSchema<T, $T> {
-    return new TupleSchema(this.shapes, { ...this.checks, default: d });
+    return new TupleSchema(this.#shapes, { ...this.#checks, default: d });
+  }
+
+  clone(): this {
+    return new TupleSchema(this.#shapes, { ...this.#checks }) as this;
   }
 
   parse(v: unknown): $T {
-    if (typeof v === "undefined" && typeof this.checks.default !== "undefined") {
-      return this.checks.default;
+    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
+      return this.#checks.default;
     }
 
     if (!Array.isArray(v)) throw new MError("Expected a tuple (must be an array)");
-    if (v.length !== this.shapes.length) {
+    if (v.length !== this.#shapes.length) {
       throw new MError(
-        `Expected tuple of length ${this.shapes.length}, received of length ${v.length}`,
+        `Expected tuple of length ${this.#shapes.length}, received of length ${v.length}`,
       );
     }
 
-    const out: any[] = [];
-    for (let i = 0; i < this.shapes.length; i++) {
-      const shape = this.shapes[i];
+    const out: unknown[] = [];
+    for (let i = 0; i < this.#shapes.length; i++) {
+      const shape = this.#shapes[i];
       if (!shape) throw new MError(`Invalid schema shape`);
 
       try {
         out[i] = shape.parse(v[i]);
       } catch (err) {
-        throw new MError(`[${i}] ${(err as Error).message}`, {
-          cause: err,
-        });
+        throw new MError(`[${i}] ${(err as MError).message}`, { cause: err });
       }
     }
     return out as $T;

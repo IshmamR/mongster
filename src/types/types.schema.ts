@@ -55,9 +55,9 @@ export type IndexOptions<Collection> = {
 };
 export type SchemaMeta<Collection> = { index?: IndexDirection; options: IndexOptions<Collection> };
 
-type TimestampKeys = "createdAt" | "updatedAt";
+export type TimestampKeys = "createdAt" | "updatedAt";
 
-export type WithTimestamps<O> = Prettify<O & { [K in TimestampKeys]: Date }>;
+export type WithTimestamps<O> = Prettify<O & { [K in TimestampKeys & string]: Date }>;
 
 export type MongsterSchemaOptions = {
   withTimestamps?: boolean;

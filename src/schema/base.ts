@@ -17,6 +17,7 @@ export abstract class MongsterSchemaBase<T> {
 
   #meta: SchemaMeta<T> = { options: {} };
 
+  abstract clone(): this;
   abstract parse(v: unknown): T;
 
   getMeta(): SchemaMeta<T> {
@@ -26,37 +27,52 @@ export abstract class MongsterSchemaBase<T> {
     this.#meta = meta;
   }
 
-  index(dir: IndexDirection = 1): this {
-    this.#meta.index = dir;
-    return this;
+  index(direction: IndexDirection = 1): this {
+    const clone = this.clone();
+    clone.#meta = { ...this.#meta, options: { ...this.#meta.options }, index: direction };
+    return clone;
   }
 
   uniqueIndex(): this {
-    this.#meta.options = { ...this.#meta.options, unique: true };
-    this.#meta.index ??= 1;
-    return this;
+    const clone = this.clone();
+    clone.#meta = {
+      ...this.#meta,
+      options: { ...this.#meta.options, unique: true },
+      index: this.#meta.index ?? 1,
+    };
+    return clone;
   }
 
   sparseIndex(): this {
-    this.#meta.options = { ...this.#meta.options, sparse: true };
-    this.#meta.index ??= 1;
-    return this;
+    const clone = this.clone();
+    clone.#meta = {
+      ...this.#meta,
+      options: { ...this.#meta.options, sparse: true },
+      index: this.#meta.index ?? 1,
+    };
+    return clone;
   }
 
   partialIndex(expr: Filter<T>): this {
-    this.#meta.options = { ...this.#meta.options, partialFilterExpression: expr };
-    this.#meta.index ??= 1;
-    return this;
+    const clone = this.clone();
+    clone.#meta = {
+      ...this.#meta,
+      options: { ...this.#meta.options, partialFilterExpression: expr },
+      index: this.#meta.index ?? 1,
+    };
+    return clone;
   }
 
   hashedIndex(): this {
-    this.#meta.index = "hashed";
-    return this;
+    const clone = this.clone();
+    clone.#meta = { ...this.#meta, options: { ...this.#meta.options }, index: "hashed" };
+    return clone;
   }
 
   textIndex(): this {
-    this.#meta.index = "text";
-    return this;
+    const clone = this.clone();
+    clone.#meta = { ...this.#meta, options: { ...this.#meta.options }, index: "text" };
+    return clone;
   }
 
   optional() {
@@ -95,7 +111,7 @@ class CustomValidationSchema<T> extends MongsterSchemaBase<T> {
     this.inner = inner;
   }
 
-  protected clone(): this {
+  clone(): this {
     return new CustomValidationSchema(this.inner, this.#validator, this.#msg) as this;
   }
 
@@ -118,6 +134,10 @@ export class OptionalSchema<T> extends MongsterSchemaBase<T | undefined> {
     this.inner = inner;
   }
 
+  clone(): this {
+    return new OptionalSchema(this.inner) as this;
+  }
+
   parse(v: unknown): T | undefined {
     return v === undefined ? undefined : this.inner.parse(v);
   }
@@ -134,16 +154,20 @@ export class NullableSchema<T> extends MongsterSchemaBase<T | null> {
     this.inner = inner;
   }
 
+  clone(): this {
+    return new NullableSchema(this.inner) as this;
+  }
+
   parse(v: unknown): T | null {
     return v === null ? null : this.inner.parse(v);
   }
 }
 
-type ArrayChecks<DA> = {
+interface ArrayChecks<A> {
   min?: number;
   max?: number;
-  default?: DA;
-};
+  default?: A;
+}
 
 export class ArraySchema<T> extends MongsterSchemaBase<T[]> {
   declare $type: T[];
@@ -158,18 +182,19 @@ export class ArraySchema<T> extends MongsterSchemaBase<T[]> {
   }
 
   min(n: number): ArraySchema<T> {
-    this.#checks.min = n;
-    return this;
+    return new ArraySchema(this.#shapes, { ...this.#checks, min: n });
   }
 
   max(n: number): ArraySchema<T> {
-    this.#checks.max = n;
-    return this;
+    return new ArraySchema(this.#shapes, { ...this.#checks, max: n });
   }
 
   default(d: T[]): ArraySchema<T> {
-    this.#checks.default = d;
-    return this;
+    return new ArraySchema(this.#shapes, { ...this.#checks, default: d });
+  }
+
+  clone(): this {
+    return new ArraySchema(this.#shapes, { ...this.#checks }) as this;
   }
 
   parse(v: unknown): T[] {
@@ -204,9 +229,9 @@ export class ArraySchema<T> extends MongsterSchemaBase<T[]> {
  */
 export class MongsterSchema<
   T extends Record<string, MongsterSchemaBase<any>>,
-  ResolvedObj = Resolve<ObjectOutput<T>>,
-> extends MongsterSchemaBase<ResolvedObj> {
-  declare $type: ResolvedObj;
+  $T = Resolve<ObjectOutput<T>>,
+> extends MongsterSchemaBase<$T> {
+  declare $type: $T;
   declare $brand: "MongsterSchema";
 
   protected rootIndexes: IndexSpecification[] = [];
@@ -219,34 +244,39 @@ export class MongsterSchema<
     this.#shape = shape;
   }
 
-  withTimestamps(): MongsterSchema<T, WithTimestamps<ResolvedObj>> {
-    this.options = { withTimestamps: true };
-    return this as MongsterSchema<T, WithTimestamps<ResolvedObj>>;
+  withTimestamps(): MongsterSchema<T, WithTimestamps<$T>> {
+    const clone = this.clone();
+    clone.options = { ...this.options, withTimestamps: true };
+    return clone as MongsterSchema<T, WithTimestamps<$T>>;
   }
 
-  createIndex<K extends AllFilterKeys<ResolvedObj>>(
+  createIndex<K extends AllFilterKeys<$T>>(
     keys: Record<K, IndexDirection>,
-    options?: IndexOptions<ResolvedObj>,
+    options?: IndexOptions<$T>,
   ): this {
     this.rootIndexes.push({ key: keys, ...(options as any) });
     return this;
   }
 
-  parse(v: unknown): ResolvedObj {
+  clone(): this {
+    return new MongsterSchema(this.#shape) as this;
+  }
+
+  parse(v: unknown): $T {
     if (typeof v !== "object" || v === null) throw new MError("Expected an object");
     if (Array.isArray(v)) throw new MError("Expected an object, but received an array");
 
-    const out: any = {};
+    const out: Record<string, unknown> = {};
     for (const [k, s] of Object.entries(this.#shape)) {
       try {
         out[k] = (s as MongsterSchemaBase<any>).parse((v as any)[k]);
       } catch (err) {
-        throw new MError(`${k}: ${(err as Error).message}`, {
+        throw new MError(`${k}: ${(err as MError).message}`, {
           cause: err,
         });
       }
     }
-    return out as ResolvedObj;
+    return out as $T;
   }
 
   /**
