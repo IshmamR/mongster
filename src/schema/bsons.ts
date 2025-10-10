@@ -1,5 +1,5 @@
 import { Binary, Decimal128, ObjectId } from "bson";
-import { MongsTerror } from "../error";
+import { MError } from "../error";
 import { MongsterSchemaBase } from "./base";
 
 type ObjectIdChecks = {
@@ -27,7 +27,7 @@ export class ObjectIdSchema extends MongsterSchemaBase<ObjectId> {
       else return this.checks.default;
     }
 
-    if (!(v instanceof ObjectId)) throw new MongsTerror(`Expected an ObjectId`);
+    if (!(v instanceof ObjectId)) throw new MError(`Expected an ObjectId`);
 
     return v;
   }
@@ -57,7 +57,7 @@ export class Decimal128Schema extends MongsterSchemaBase<Decimal128> {
       return this.checks.default;
     }
 
-    if (!(v instanceof Decimal128)) throw new MongsTerror("Expected a Decimal128");
+    if (!(v instanceof Decimal128)) throw new MError("Expected a Decimal128");
 
     return v;
   }
@@ -124,7 +124,7 @@ export class BinarySchema<
   }
 
   bsonSubType(b: BSONSubtype): BinarySchema<TA> {
-    if (!isValidBsonSubtype(b)) throw new MongsTerror(`Invalid BSON subtype: ${b}`);
+    if (!isValidBsonSubtype(b)) throw new MError(`Invalid BSON subtype: ${b}`);
 
     return new BinarySchema({ ...this.checks, subType: b });
   }
@@ -140,7 +140,7 @@ export class BinarySchema<
     if (Array.isArray(v) && v.every((x) => Number.isInteger(x) && x >= 0 && x <= 255)) {
       return Buffer.from(v as number[]);
     }
-    throw new MongsTerror("Expected a (Binary | Buffer)");
+    throw new MError("Expected a (Binary | Buffer)");
   }
 
   parse(v: unknown): TA {
@@ -151,15 +151,15 @@ export class BinarySchema<
     const buf = this.toBuffer(v);
     const len = buf.length;
     if (typeof this.checks.min !== "undefined" && len < this.checks.min) {
-      throw new MongsTerror(`Buffer is too short (min ${this.checks.min})`);
+      throw new MError(`Buffer is too short (min ${this.checks.min})`);
     }
     if (typeof this.checks.max !== "undefined" && len > this.checks.max) {
-      throw new MongsTerror(`Buffer is too long (max ${this.checks.max})`);
+      throw new MError(`Buffer is too long (max ${this.checks.max})`);
     }
 
     if (v instanceof Binary) {
       if (v.sub_type !== this.checks.subType) {
-        throw new MongsTerror(
+        throw new MError(
           `Invalid Binary subtype: expected ${this.checks.subType}, got ${v.sub_type}`,
         );
       }

@@ -41,17 +41,19 @@ type OptionalOutputs<T extends Record<string, MongsterSchemaBase<any>>> = {
 export type ObjectOutput<T extends Record<string, MongsterSchemaBase<any>>> = RequiredOutputs<T> &
   OptionalOutputs<T>;
 
+export type ValidatorFunc<T> = (v: T) => boolean;
+
 export type IndexDirection = 1 | -1 | "hashed" | "text";
-export type IndexOptions<Coll> = {
+export type IndexOptions<Collection> = {
   unique?: boolean;
   sparse?: boolean;
-  partialFilterExpression?: Filter<Coll>;
-  expireAfterSeconds?: number; // TTL
+  partialFilterExpression?: Filter<Collection>;
+  expireAfterSeconds?: number;
   name?: string;
   default_language?: string;
   weights?: any;
 };
-export type SchemaMeta<Coll> = { index?: IndexDirection; options: IndexOptions<Coll> };
+export type SchemaMeta<Collection> = { index?: IndexDirection; options: IndexOptions<Collection> };
 
 type TimestampKeys = "createdAt" | "updatedAt";
 

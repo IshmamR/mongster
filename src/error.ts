@@ -6,7 +6,7 @@ export interface MongsterIssue {
 /**
  * Yes, it is the error class
  */
-export class MongsTerror extends Error {
+export class MError extends Error {
   issues: MongsterIssue[];
 
   constructor(issues: string, options?: ErrorOptions);
@@ -28,17 +28,17 @@ export class MongsTerror extends Error {
     } else {
       normalizedIssues = Array.isArray(issues) ? issues : [issues];
       message =
-        typeof arg2 === "string" ? arg2 : (normalizedIssues[0]?.message ?? "MongsTerror occurred");
+        typeof arg2 === "string" ? arg2 : (normalizedIssues[0]?.message ?? "MError occurred");
       options = (typeof arg2 === "string" ? arg3 : arg2) as ErrorOptions | undefined;
     }
 
     super(message, options);
 
     Object.setPrototypeOf(this, new.target.prototype);
-    this.name = "MongsTerror";
+    this.name = "MError";
 
     this.issues = normalizedIssues;
   }
 }
 
-export { MongsTerror as MongsterError };
+export { MError as MongsterError };

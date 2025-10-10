@@ -1,6 +1,5 @@
 import type { Filter, IndexSpecification } from "mongodb";
-import { MongsTerror } from "../error";
-import type { PositiveNumber } from "../types/types.common";
+import { MError } from "../error";
 import type { AllFilterKeys } from "../types/types.query";
 import type {
   IndexDirection,
@@ -9,60 +8,55 @@ import type {
   ObjectOutput,
   Resolve,
   SchemaMeta,
+  ValidatorFunc,
   WithTimestamps,
 } from "../types/types.schema";
 
 export abstract class MongsterSchemaBase<T> {
   declare $type: T;
 
-  protected meta: SchemaMeta<T> = {
-    options: {},
-  };
+  #meta: SchemaMeta<T> = { options: {} };
 
   abstract parse(v: unknown): T;
 
-  protected abstract clone(): this;
+  getMeta(): SchemaMeta<T> {
+    return this.#meta;
+  }
+  setMeta(meta: SchemaMeta<T>) {
+    this.#meta = meta;
+  }
 
   index(dir: IndexDirection = 1): this {
-    const copy = this.clone();
-    copy.meta.index = dir;
-    return copy;
+    this.#meta.index = dir;
+    return this;
   }
 
-  unique(): this {
-    const copy = this.clone();
-    copy.meta.options = { ...copy.meta.options, unique: true };
-    copy.meta.index ??= 1;
-    return copy;
+  uniqueIndex(): this {
+    this.#meta.options = { ...this.#meta.options, unique: true };
+    this.#meta.index ??= 1;
+    return this;
   }
 
-  sparse(): this {
-    const copy = this.clone();
-    copy.meta.options = { ...copy.meta.options, sparse: true };
-    copy.meta.index ??= 1;
-    return copy;
+  sparseIndex(): this {
+    this.#meta.options = { ...this.#meta.options, sparse: true };
+    this.#meta.index ??= 1;
+    return this;
   }
 
-  partial(expr: Filter<T>): this {
-    const copy = this.clone();
-    copy.meta.options = {
-      ...copy.meta.options,
-      partialFilterExpression: expr,
-    };
-    copy.meta.index ??= 1;
-    return copy;
+  partialIndex(expr: Filter<T>): this {
+    this.#meta.options = { ...this.#meta.options, partialFilterExpression: expr };
+    this.#meta.index ??= 1;
+    return this;
   }
 
-  hashed(): this {
-    const copy = this.clone();
-    copy.meta.index = "hashed";
-    return copy;
+  hashedIndex(): this {
+    this.#meta.index = "hashed";
+    return this;
   }
 
-  text(): this {
-    const copy = this.clone();
-    copy.meta.index = "text";
-    return copy;
+  textIndex(): this {
+    this.#meta.index = "text";
+    return this;
   }
 
   optional() {
@@ -80,16 +74,9 @@ export abstract class MongsterSchemaBase<T> {
   /**
    * Custom validation method for your schema
    */
-  validate(validator: (v: T) => boolean) {
-    return new CustomValidationSchema<T>(this, validator);
+  validate(validator: ValidatorFunc<T>, message?: string) {
+    return new CustomValidationSchema<T>(this, validator, message);
   }
-}
-
-export abstract class MSchemaBaseInternal<T> extends MongsterSchemaBase<T> {
-  declare $type: T;
-
-  checks: object = {};
-  inner: MongsterSchemaBase<T> | undefined;
 }
 
 class CustomValidationSchema<T> extends MongsterSchemaBase<T> {
@@ -98,28 +85,30 @@ class CustomValidationSchema<T> extends MongsterSchemaBase<T> {
   // @internal used internally
   protected inner: MongsterSchemaBase<T>;
 
-  constructor(
-    inner: MongsterSchemaBase<T>,
-    private validator: (v: T) => boolean,
-    private msg?: string,
-  ) {
+  #validator: ValidatorFunc<T>;
+  #msg?: string;
+
+  constructor(inner: MongsterSchemaBase<T>, validator: ValidatorFunc<T>, msg?: string) {
     super();
+    this.#validator = validator;
+    this.#msg = msg;
     this.inner = inner;
   }
 
   protected clone(): this {
-    return new CustomValidationSchema(this.inner, this.validator, this.msg) as this;
+    return new CustomValidationSchema(this.inner, this.#validator, this.#msg) as this;
   }
 
   parse(v: unknown): T {
-    const validated = this.validator(v as any);
-    if (!validated) throw new MongsTerror(this.msg ?? `Custom validation failed`);
-    return this.inner.parse(v);
+    const parsed = this.inner.parse(v);
+    const validated = this.#validator(parsed);
+    if (!validated) throw new MError(this.#msg ?? `Custom validation failed`);
+    return parsed;
   }
 }
 
 export class OptionalSchema<T> extends MongsterSchemaBase<T | undefined> {
-  declare _type: T | undefined;
+  declare $type: T | undefined;
 
   // @internal used internally
   protected inner: MongsterSchemaBase<T>;
@@ -127,10 +116,6 @@ export class OptionalSchema<T> extends MongsterSchemaBase<T | undefined> {
   constructor(inner: MongsterSchemaBase<T>) {
     super();
     this.inner = inner;
-  }
-
-  protected clone(): this {
-    return new OptionalSchema(this.inner) as this;
   }
 
   parse(v: unknown): T | undefined {
@@ -149,10 +134,6 @@ export class NullableSchema<T> extends MongsterSchemaBase<T | null> {
     this.inner = inner;
   }
 
-  protected clone(): this {
-    return new NullableSchema(this.inner) as this;
-  }
-
   parse(v: unknown): T | null {
     return v === null ? null : this.inner.parse(v);
   }
@@ -167,49 +148,50 @@ type ArrayChecks<DA> = {
 export class ArraySchema<T> extends MongsterSchemaBase<T[]> {
   declare $type: T[];
 
-  constructor(
-    private shapes: MongsterSchemaBase<T>,
-    private checks: ArrayChecks<T[]> = {},
-  ) {
+  #shapes: MongsterSchemaBase<T>;
+  #checks: ArrayChecks<T[]>;
+
+  constructor(shapes: MongsterSchemaBase<T>, checks: ArrayChecks<T[]> = {}) {
     super();
+    this.#shapes = shapes;
+    this.#checks = checks;
   }
 
-  protected clone(): this {
-    return new ArraySchema(this.shapes, this.checks) as this;
+  min(n: number): ArraySchema<T> {
+    this.#checks.min = n;
+    return this;
   }
 
-  min<N extends number>(n: PositiveNumber<N>): ArraySchema<T> {
-    return new ArraySchema(this.shapes, { ...this.checks, min: n as N });
-  }
-
-  max<N extends number>(n: PositiveNumber<N>): ArraySchema<T> {
-    return new ArraySchema(this.shapes, { ...this.checks, max: n as N });
+  max(n: number): ArraySchema<T> {
+    this.#checks.max = n;
+    return this;
   }
 
   default(d: T[]): ArraySchema<T> {
-    return new ArraySchema(this.shapes, { ...this.checks, default: d });
+    this.#checks.default = d;
+    return this;
   }
 
   parse(v: unknown): T[] {
-    if (typeof v === "undefined" && typeof this.checks.default !== "undefined") {
-      return this.checks.default;
+    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
+      return this.#checks.default;
     }
 
-    if (!Array.isArray(v)) throw new MongsTerror("Expected an array");
+    if (!Array.isArray(v)) throw new MError("Expected an array");
 
     const arrLength = v.length;
-    if (typeof this.checks.min !== "undefined" && arrLength < this.checks.min) {
-      throw new MongsTerror(`Array length must be greater than or equal to ${this.checks.min}`);
+    if (typeof this.#checks.min !== "undefined" && arrLength < this.#checks.min) {
+      throw new MError(`Array length must be greater than or equal to ${this.#checks.min}`);
     }
-    if (typeof this.checks.max !== "undefined" && arrLength > this.checks.max) {
-      throw new MongsTerror(`Array length must be less than or equal to ${this.checks.max}`);
+    if (typeof this.#checks.max !== "undefined" && arrLength > this.#checks.max) {
+      throw new MError(`Array length must be less than or equal to ${this.#checks.max}`);
     }
 
     return v.map((x, i) => {
       try {
-        return this.shapes.parse(x);
+        return this.#shapes.parse(x);
       } catch (err) {
-        throw new MongsTerror(`[${i}] ${(err as Error).message}`, {
+        throw new MError(`[${i}] ${(err as Error).message}`, {
           cause: err,
         });
       }
@@ -218,7 +200,7 @@ export class ArraySchema<T> extends MongsterSchemaBase<T[]> {
 }
 
 /**
- * The one that goes to collection
+ * The schema that goes to collection
  */
 export class MongsterSchema<
   T extends Record<string, MongsterSchemaBase<any>>,
@@ -230,22 +212,20 @@ export class MongsterSchema<
   protected rootIndexes: IndexSpecification[] = [];
   protected options: MongsterSchemaOptions = {};
 
-  constructor(protected shape: T) {
-    super();
-  }
+  #shape: T;
 
-  protected clone(): this {
-    return new MongsterSchema({ ...this.shape }) as this;
+  constructor(shape: T) {
+    super();
+    this.#shape = shape;
   }
 
   withTimestamps(): MongsterSchema<T, WithTimestamps<ResolvedObj>> {
-    const proxySchema = new MongsterSchema<T, WithTimestamps<ResolvedObj>>(this.shape);
-    proxySchema.options = { withTimestamps: true };
-    return proxySchema;
+    this.options = { withTimestamps: true };
+    return this as MongsterSchema<T, WithTimestamps<ResolvedObj>>;
   }
 
   createIndex<K extends AllFilterKeys<ResolvedObj>>(
-    keys: Record<K, 1 | -1 | "text" | "hashed">,
+    keys: Record<K, IndexDirection>,
     options?: IndexOptions<ResolvedObj>,
   ): this {
     this.rootIndexes.push({ key: keys, ...(options as any) });
@@ -253,15 +233,15 @@ export class MongsterSchema<
   }
 
   parse(v: unknown): ResolvedObj {
-    if (typeof v !== "object" || v === null) throw new MongsTerror("Expected an object");
-    if (Array.isArray(v)) throw new MongsTerror("Expected an object, but received an array");
+    if (typeof v !== "object" || v === null) throw new MError("Expected an object");
+    if (Array.isArray(v)) throw new MError("Expected an object, but received an array");
 
     const out: any = {};
-    for (const [k, s] of Object.entries(this.shape)) {
+    for (const [k, s] of Object.entries(this.#shape)) {
       try {
         out[k] = (s as MongsterSchemaBase<any>).parse((v as any)[k]);
       } catch (err) {
-        throw new MongsTerror(`${k}: ${(err as Error).message}`, {
+        throw new MError(`${k}: ${(err as Error).message}`, {
           cause: err,
         });
       }
@@ -279,12 +259,12 @@ export class MongsterSchema<
     const collected: IndexSpecification[] = [...this.rootIndexes];
 
     function pushFieldIndex(path: string, schema: MongsterSchemaBase<any>) {
-      const meta = (schema as any).meta as SchemaMeta<any> | undefined;
+      const meta = schema.getMeta();
       if (meta && typeof meta.index !== "undefined") {
         const opts =
           meta.options && Object.keys(meta.options).length ? { ...meta.options } : undefined;
         collected.push({
-          key: { [path]: meta.index } as any,
+          key: { [path]: meta.index },
           ...(opts as any),
         });
       }
@@ -330,7 +310,7 @@ export class MongsterSchema<
       }
     }
 
-    walkShape(this.shape, "");
+    walkShape(this.#shape, "");
 
     return collected;
   }

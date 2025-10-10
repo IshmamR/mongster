@@ -1,260 +1,237 @@
-import { MongsTerror } from "../error";
-import type { PositiveNumber } from "../types/types.common";
+import { MError } from "../error";
+import type { SchemaMeta } from "../types/types.schema";
 import { MongsterSchemaBase } from "./base";
 
-type NumberChecks = {
+interface NumberChecks<N> {
   min?: number;
   max?: number;
   enum?: number[];
-  default?: number;
-};
+  default?: N;
+}
 
-type NumberTransforms = {
-  toFixed?: number;
-};
+export class NumberSchema<TP extends number = number> extends MongsterSchemaBase<TP> {
+  declare $type: TP;
 
-export class NumberSchema extends MongsterSchemaBase<number> {
-  declare $type: number;
+  #checks: NumberChecks<TP>;
 
-  constructor(
-    private checks: NumberChecks = {},
-    private transforms: NumberTransforms = {},
-  ) {
+  constructor(checks: NumberChecks<TP> = {}) {
     super();
+    this.#checks = checks;
   }
 
-  protected clone(): this {
-    return new NumberSchema({ ...this.checks }, { ...this.transforms }) as this;
+  min(n: number): NumberSchema<TP> {
+    this.#checks.min = n;
+    return this;
   }
 
-  min(n: number): NumberSchema {
-    return new NumberSchema({ ...this.checks, min: n }, this.transforms);
+  max(n: number): NumberSchema<TP> {
+    this.#checks.max = n;
+    return this;
   }
 
-  max(n: number): NumberSchema {
-    return new NumberSchema({ ...this.checks, max: n }, this.transforms);
+  enum<E extends TP>(e: E[]): NumberSchema<E> {
+    this.#checks.enum = e;
+    return this as unknown as NumberSchema<E>;
   }
 
-  enum(e: number[]): NumberSchema {
-    return new NumberSchema({ ...this.checks, enum: e }, this.transforms);
+  default(d: TP): NumberSchema<TP> {
+    this.#checks.default = d;
+    return this;
   }
 
-  default(d: number): NumberSchema {
-    return new NumberSchema({ ...this.checks, default: d }, this.transforms);
-  }
-
-  toFixed<N extends number>(n: PositiveNumber<N>): NumberSchema {
-    return new NumberSchema(this.checks, {
-      ...this.transforms,
-      toFixed: n as N,
-    });
-  }
-
-  parse(v: unknown): number {
-    if (typeof v === "undefined" && typeof this.checks.default !== "undefined") {
-      return this.checks.default;
+  parse(v: unknown): TP {
+    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
+      return this.#checks.default;
     }
 
-    if (typeof v !== "number") throw new MongsTerror("Expected a number");
-
-    if (typeof this.checks.min !== "undefined" && v < this.checks.min) {
-      throw new MongsTerror(`Value must be greater than or equal to ${this.checks.min}`);
-    }
-    if (typeof this.checks.max !== "undefined" && v > this.checks.max) {
-      throw new MongsTerror(`Value must be less than or equal to ${this.checks.max}`);
+    if (typeof v !== "number") {
+      if (typeof v === "undefined") {
+        throw new MError("Expected a number, but received undefined. Field is required.");
+      }
+      throw new MError("Expected a number");
     }
 
-    if (typeof this.checks.enum !== "undefined" && !this.checks.enum.includes(v)) {
-      throw new MongsTerror(`Value must be one of [${this.checks.enum.join(", ")}]`);
+    if (typeof this.#checks.min !== "undefined" && v < this.#checks.min) {
+      throw new MError(`Value must be greater than or equal to ${this.#checks.min}`);
+    }
+    if (typeof this.#checks.max !== "undefined" && v > this.#checks.max) {
+      throw new MError(`Value must be less than or equal to ${this.#checks.max}`);
     }
 
-    let out = v;
-    for (const tk of Object.keys(this.transforms) as Array<keyof NumberTransforms>) {
-      if (tk === "toFixed") out = Number(out.toFixed(this.transforms.toFixed));
+    if (typeof this.#checks.enum !== "undefined" && !this.#checks.enum.includes(v)) {
+      throw new MError(`Value must be one of [${this.#checks.enum.join(", ")}]`);
     }
 
-    return v;
+    return v as TP;
   }
 }
 
-type StringChecks = {
+interface StringChecks<S> {
   min?: number;
   max?: number;
   enum?: string[];
   match?: RegExp;
-  default?: string; // default value
-};
+  default?: S;
+}
 
-type StringTransforms = {
-  lowercase?: boolean;
-  uppercase?: boolean;
-  trim?: boolean;
-};
+export class StringSchema<TP extends string = string> extends MongsterSchemaBase<TP> {
+  declare $type: TP;
 
-export class StringSchema extends MongsterSchemaBase<string> {
-  declare $type: string;
+  #checks: StringChecks<TP>;
 
-  constructor(
-    private checks: StringChecks = {},
-    private transforms: StringTransforms = {},
-  ) {
+  constructor(checks: StringChecks<TP> = {}) {
     super();
+    this.#checks = checks;
   }
 
-  protected clone(): this {
-    return new StringSchema({ ...this.checks }, { ...this.transforms }) as this;
+  min(n: number): StringSchema<TP> {
+    this.#checks.min = n;
+    return this;
   }
 
-  min<N extends number>(n: PositiveNumber<N>): StringSchema {
-    return new StringSchema({ ...this.checks, min: n as N }, this.transforms);
+  max(n: number): StringSchema<TP> {
+    this.#checks.max = n;
+    return this;
   }
 
-  max<N extends number>(n: PositiveNumber<N>): StringSchema {
-    return new StringSchema({ ...this.checks, max: n as N }, this.transforms);
+  enum<E extends TP>(e: E[]): StringSchema<E> {
+    this.#checks.enum = e;
+    return this as unknown as StringSchema<E>;
   }
 
-  enum(e: string[]): StringSchema {
-    return new StringSchema({ ...this.checks, enum: e }, this.transforms);
+  match(r: RegExp): StringSchema<TP> {
+    this.#checks.match = r;
+    return this;
   }
 
-  match(r: RegExp): StringSchema {
-    return new StringSchema({ ...this.checks, match: r }, this.transforms);
+  default(d: TP): StringSchema<TP> {
+    this.#checks.default = d;
+    return this;
   }
 
-  default(d: string): StringSchema {
-    return new StringSchema({ ...this.checks, default: d }, this.transforms);
-  }
-
-  lowercase(): StringSchema {
-    return new StringSchema(this.checks, {
-      ...this.transforms,
-      lowercase: true,
-    });
-  }
-
-  uppercase(): StringSchema {
-    return new StringSchema(this.checks, {
-      ...this.transforms,
-      uppercase: true,
-    });
-  }
-
-  trim(): StringSchema {
-    return new StringSchema(this.checks, { ...this.transforms, trim: true });
-  }
-
-  parse(v: unknown): string {
-    if (typeof v === "undefined" && typeof this.checks.default !== "undefined") {
-      return this.checks.default;
+  parse(v: unknown): TP {
+    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
+      return this.#checks.default;
     }
 
-    if (typeof v !== "string") throw new MongsTerror("Expected a string");
+    if (typeof v !== "string") {
+      if (typeof v === "undefined") {
+        throw new MError("Expected a string, but received undefined. Field is required.");
+      }
+      throw new MError("Expected a string");
+    }
 
     const len = v.length;
-    if (typeof this.checks.min === "number" && len < this.checks.min) {
-      throw new MongsTerror(`Value must be longer than or equal to ${this.checks.min} characters`);
+    if (typeof this.#checks.min === "number" && len < this.#checks.min) {
+      throw new MError(`Value must be longer than or equal to ${this.#checks.min} characters`);
     }
-    if (typeof this.checks.max === "number" && len > this.checks.max) {
-      throw new MongsTerror(`Value must be shorter than or equal to ${this.checks.max} characters`);
-    }
-
-    if (typeof this.checks.enum !== "undefined" && !this.checks.enum.includes(v)) {
-      throw new MongsTerror(`Value must be one of [${this.checks.enum.join(", ")}]`);
+    if (typeof this.#checks.max === "number" && len > this.#checks.max) {
+      throw new MError(`Value must be shorter than or equal to ${this.#checks.max} characters`);
     }
 
-    if (this.checks.match instanceof RegExp && !this.checks.match.test(v)) {
-      throw new MongsTerror(`Value does not follow pattern ${this.checks.match}`);
+    if (typeof this.#checks.enum !== "undefined" && !this.#checks.enum.includes(v)) {
+      throw new MError(`Value must be one of [${this.#checks.enum.join(", ")}]`);
     }
 
-    let out = v;
-    for (const tk of Object.keys(this.transforms) as Array<keyof StringTransforms>) {
-      if (tk === "lowercase") out = out.toLowerCase();
-      if (tk === "uppercase") out = out.toUpperCase();
-      if (tk === "trim") out = out.trim();
+    if (this.#checks.match instanceof RegExp && !this.#checks.match.test(v)) {
+      throw new MError(`Value does not follow pattern ${this.#checks.match}`);
     }
 
-    return out;
+    return v as TP;
   }
 }
 
-type BooleanChecks = {
+interface BooleanChecks {
   default?: boolean;
-};
+}
 
 export class BooleanSchema extends MongsterSchemaBase<boolean> {
   declare $type: boolean;
 
-  constructor(private checks: BooleanChecks = {}) {
-    super();
-  }
+  #checks: BooleanChecks;
 
-  protected clone(): this {
-    return new BooleanSchema({ ...this.checks }) as this;
+  constructor(checks: BooleanChecks = {}) {
+    super();
+    this.#checks = checks;
   }
 
   default(d: boolean): BooleanSchema {
-    return new BooleanSchema({ ...this.checks, default: d });
+    this.#checks.default = d;
+    return this;
   }
 
   parse(v: unknown): boolean {
-    if (typeof v === "undefined" && typeof this.checks.default !== "undefined") {
-      return this.checks.default;
+    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
+      return this.#checks.default;
     }
 
-    if (typeof v !== "boolean") throw new MongsTerror("Expected a boolean");
+    if (typeof v !== "boolean") {
+      if (typeof v === "undefined") {
+        throw new MError("Expected a boolean, but received undefined. Field is required.");
+      }
+      throw new MError("Expected a boolean");
+    }
 
     return v;
   }
 }
 
-type DateChecks = {
+interface DateChecks {
   min?: Date;
   max?: Date;
   default?: Date;
-};
+}
 
 export class DateSchema extends MongsterSchemaBase<Date> {
   declare $type: Date;
 
-  constructor(private checks: DateChecks = {}) {
-    super();
-  }
+  #checks: DateChecks;
 
-  protected clone(): this {
-    return new DateSchema({ ...this.checks }) as this;
+  constructor(checks: DateChecks = {}) {
+    super();
+    this.#checks = checks;
   }
 
   min(d: Date): DateSchema {
-    return new DateSchema({ ...this.checks, min: d });
+    this.#checks.min = d;
+    return this;
   }
 
   max(d: Date): DateSchema {
-    return new DateSchema({ ...this.checks, max: d });
+    this.#checks.max = d;
+    return this;
   }
 
   default(d: Date): DateSchema {
-    return new DateSchema({ ...this.checks, default: d });
+    this.#checks.default = d;
+    return this;
   }
 
   parse(v: unknown): Date {
-    if (typeof v === "undefined" && typeof this.checks.default !== "undefined") {
-      return this.checks.default;
+    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
+      return this.#checks.default;
     }
 
     let out: Date;
     if (v instanceof Date) out = v;
     else if (typeof v === "string" || typeof v === "number") out = new Date(v);
-    else throw new MongsTerror(`Expected a valid (date | date string | number)`);
+    else if (typeof v === "undefined") {
+      throw new MError(
+        `Expected a valid (date | date string | number), but received undefined. Field is required.`,
+      );
+    } else {
+      throw new MError(`Expected a valid (date | date string | number)`);
+    }
 
     const timeVal = out.getTime();
 
-    if (Number.isNaN(timeVal)) throw new MongsTerror(`Invalid date`);
+    if (Number.isNaN(timeVal)) throw new MError(`Invalid date`);
 
-    if (typeof this.checks.min !== "undefined" && timeVal < this.checks.min.getTime()) {
-      throw new MongsTerror(`Value must be after or equal to ${this.checks.min.toISOString()}`);
+    if (typeof this.#checks.min !== "undefined" && timeVal < this.#checks.min.getTime()) {
+      throw new MError(`Value must be after or equal to ${this.#checks.min.toISOString()}`);
     }
-    if (typeof this.checks.max !== "undefined" && timeVal > this.checks.max.getTime()) {
-      throw new MongsTerror(`Value must be before or equal to ${this.checks.max.toISOString()}`);
+    if (typeof this.#checks.max !== "undefined" && timeVal > this.#checks.max.getTime()) {
+      throw new MError(`Value must be before or equal to ${this.#checks.max.toISOString()}`);
     }
 
     return out;
@@ -264,17 +241,20 @@ export class DateSchema extends MongsterSchemaBase<Date> {
    * Create a TTL index on the field
    * @param s The TTL index expireAfterSeconds value
    */
-  ttl<N extends number>(s: PositiveNumber<N>): DateSchema {
-    const next = new DateSchema({ ...this.checks });
-    next.meta.index ??= 1;
-    next.meta.options = { ...next.meta.options, expireAfterSeconds: s as N };
-    return next;
+  ttl(s: number): DateSchema {
+    const currMeta = this.getMeta();
+    const newMeta: SchemaMeta<Date> = {
+      options: { ...currMeta.options, expireAfterSeconds: s },
+      index: currMeta.index ?? 1,
+    };
+    this.setMeta(newMeta);
+    return this;
   }
 
   /**
    * Alias to `.ttl()`
    */
-  expires<N extends number>(s: PositiveNumber<N>): DateSchema {
+  expires(s: number): DateSchema {
     return this.ttl(s);
   }
 }
