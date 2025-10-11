@@ -244,8 +244,9 @@ export class ArraySchema<T, I> extends MongsterSchemaBase<T[], I[]> {
   }
 
   parse(v: unknown): T[] {
-    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
-      return this.#checks.default;
+    if (typeof v === "undefined") {
+      if (typeof this.#checks.default !== "undefined") return this.#checks.default;
+      if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
     if (!Array.isArray(v)) throw new MError("Expected an array");

@@ -52,6 +52,16 @@ describe("Primitive Schemas", () => {
       expect(schema.parse(10)).toBe(10);
     });
 
+    test("should handle defaultFn values", () => {
+      const schema = M.number().defaultFn(() => 7);
+      expect(schema.parse(undefined)).toBe(7);
+      expect(schema.parse(9)).toBe(9);
+    });
+
+    test("should handle defaultFn values", () => {
+      const schema = M.tuple([M.string(), M.number()]).defaultFn(() => ["x", 1]);
+      expect(schema.parse(undefined)).toEqual(["x", 1]);
+    });
     test("should chain validation methods", () => {
       const schema = M.number().min(0).max(100).default(50);
       expect(schema.parse(undefined)).toBe(50);
@@ -114,6 +124,12 @@ describe("Primitive Schemas", () => {
       expect(schema.parse(undefined)).toBe("default");
       expect(schema.parse("custom")).toBe("custom");
     });
+
+    test("should handle defaultFn values", () => {
+      const schema = M.string().defaultFn(() => "gen");
+      expect(schema.parse(undefined)).toBe("gen");
+      expect(schema.parse("given")).toBe("given");
+    });
   });
 
   describe("BooleanSchema", () => {
@@ -135,6 +151,12 @@ describe("Primitive Schemas", () => {
       const schema = M.boolean().default(true);
       expect(schema.parse(undefined)).toBe(true);
       expect(schema.parse(false)).toBe(false);
+    });
+
+    test("should handle defaultFn values", () => {
+      const schema = M.boolean().defaultFn(() => false);
+      expect(schema.parse(undefined)).toBe(false);
+      expect(schema.parse(true)).toBe(true);
     });
   });
 
@@ -181,6 +203,12 @@ describe("Primitive Schemas", () => {
       const schema = M.date().default(defaultDate);
       expect(schema.parse(undefined)).toEqual(defaultDate);
     });
+
+    test("should handle defaultFn values", () => {
+      const d = new Date("2026-02-02");
+      const schema = M.date().defaultFn(() => d);
+      expect(schema.parse(undefined)).toEqual(d);
+    });
   });
 });
 
@@ -210,6 +238,12 @@ describe("BSON Schemas", () => {
       const schema = M.objectId().default(defaultId);
       expect(schema.parse(undefined)).toBe(defaultId);
     });
+
+    test("should handle defaultFn ObjectId", () => {
+      const def = new ObjectId();
+      const schema = M.objectId().defaultFn(() => def);
+      expect(schema.parse(undefined)).toBe(def);
+    });
   });
 
   describe("Decimal128Schema", () => {
@@ -230,6 +264,12 @@ describe("BSON Schemas", () => {
       const defaultDecimal = Decimal128.fromString("100.00");
       const schema = M.decimal().default(defaultDecimal);
       expect(schema.parse(undefined)).toBe(defaultDecimal);
+    });
+
+    test("should handle defaultFn values", () => {
+      const d = Decimal128.fromString("200.50");
+      const schema = M.decimal().defaultFn(() => d);
+      expect(schema.parse(undefined)).toBe(d);
     });
   });
 
@@ -300,6 +340,14 @@ describe("BSON Schemas", () => {
       const defaultBinary = new Binary(Buffer.from("default"));
       const schema = M.binary().default(defaultBinary);
       expect(schema.parse(undefined)).toBe(defaultBinary);
+    });
+
+    test("should handle defaultFn values", () => {
+      const mk = () => new Binary(Buffer.from("gen"));
+      const schema = M.binary().defaultFn(mk);
+      const result = schema.parse(undefined);
+      expect(result).toBeInstanceOf(Binary);
+      expect(result.buffer.toString()).toBe("gen");
     });
   });
 });
@@ -416,6 +464,12 @@ describe("Array Schemas", () => {
       const schema = M.array(M.string()).default(["default"]);
       expect(schema.parse(undefined)).toEqual(["default"]);
       expect(schema.parse(["custom"])).toEqual(["custom"]);
+    });
+
+    test("should handle defaultFn values", () => {
+      const schema = M.array(M.string()).defaultFn(() => ["a", "b"]);
+      expect(schema.parse(undefined)).toEqual(["a", "b"]);
+      expect(schema.parse(["x"])).toEqual(["x"]);
     });
 
     test("should work with complex item schemas", () => {
@@ -621,6 +675,11 @@ describe("Union Schemas", () => {
       expect(schema.parse(42)).toBe(42);
     });
 
+    test("should handle defaultFn values", () => {
+      const schema = M.union(M.string(), M.number()).defaultFn(() => 123);
+      expect(schema.parse(undefined)).toBe(123);
+    });
+
     test("should work with arrays and objects", () => {
       const schema = M.union(M.array(M.string()), M.object({ count: M.number() }));
 
@@ -750,6 +809,14 @@ describe("Object Schemas", () => {
 
       expect(schema.parse(undefined)).toEqual(defaultObj);
       expect(schema.parse({ name: "Custom", count: 5 })).toEqual({ name: "Custom", count: 5 });
+    });
+
+    test("should handle defaultFn values", () => {
+      const schema = M.object({ name: M.string(), count: M.number() }).defaultFn(() => ({
+        name: "Gen",
+        count: 1,
+      }));
+      expect(schema.parse(undefined)).toEqual({ name: "Gen", count: 1 });
     });
 
     test("should work with optional properties", () => {

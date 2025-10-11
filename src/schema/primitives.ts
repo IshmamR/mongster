@@ -51,8 +51,9 @@ export class NumberSchema<TP extends number = number> extends MongsterSchemaBase
   }
 
   parse(v: unknown): TP {
-    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
-      return this.#checks.default;
+    if (typeof v === "undefined") {
+      if (typeof this.#checks.default !== "undefined") return this.#checks.default;
+      if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
     if (typeof v !== "number") {
@@ -131,8 +132,9 @@ export class StringSchema<TP extends string = string> extends MongsterSchemaBase
   }
 
   parse(v: unknown): TP {
-    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
-      return this.#checks.default;
+    if (typeof v === "undefined") {
+      if (typeof this.#checks.default !== "undefined") return this.#checks.default;
+      if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
     if (typeof v !== "string") {
@@ -193,8 +195,9 @@ export class BooleanSchema extends MongsterSchemaBase<boolean, boolean> {
   }
 
   parse(v: unknown): boolean {
-    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
-      return this.#checks.default;
+    if (typeof v === "undefined") {
+      if (typeof this.#checks.default !== "undefined") return this.#checks.default;
+      if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
     if (typeof v !== "boolean") {
@@ -249,8 +252,9 @@ export class DateSchema extends MongsterSchemaBase<Date, Date> {
   }
 
   parse(v: unknown): Date {
-    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
-      return this.#checks.default;
+    if (typeof v === "undefined") {
+      if (typeof this.#checks.default !== "undefined") return this.#checks.default;
+      if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
     let out: Date;

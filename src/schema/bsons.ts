@@ -33,9 +33,12 @@ export class ObjectIdSchema extends MongsterSchemaBase<ObjectId, ObjectId> {
   }
 
   parse(v: unknown): ObjectId {
-    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
-      if (this.#checks.default === "generate") return new ObjectId();
-      return this.#checks.default;
+    if (typeof v === "undefined") {
+      if (typeof this.#checks.default !== "undefined") {
+        if (this.#checks.default === "generate") return new ObjectId();
+        return this.#checks.default;
+      }
+      if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
     if (!(v instanceof ObjectId)) throw new MError(`Expected an ObjectId`);
@@ -74,8 +77,9 @@ export class Decimal128Schema extends MongsterSchemaBase<Decimal128, Decimal128>
   }
 
   parse(v: unknown): Decimal128 {
-    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
-      return this.#checks.default;
+    if (typeof v === "undefined") {
+      if (typeof this.#checks.default !== "undefined") return this.#checks.default;
+      if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
     if (!(v instanceof Decimal128)) throw new MError("Expected a Decimal128");
@@ -159,8 +163,9 @@ export class BinarySchema extends MongsterSchemaBase<Binary, Binary> {
   }
 
   parse(v: unknown): Binary {
-    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
-      v = this.#checks.default;
+    if (typeof v === "undefined") {
+      if (typeof this.#checks.default !== "undefined") v = this.#checks.default;
+      else if (typeof this.#checks.defaultFn === "function") v = this.#checks.defaultFn();
     }
 
     const buf = this.#toBuffer(v);

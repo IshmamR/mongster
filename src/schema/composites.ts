@@ -39,8 +39,9 @@ export class ObjectSchema<
   }
 
   parse(v: unknown): $T {
-    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
-      return this.#checks.default;
+    if (typeof v === "undefined") {
+      if (typeof this.#checks.default !== "undefined") return this.#checks.default;
+      if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
     if (typeof v !== "object") throw new MError("Expected an object");
@@ -98,8 +99,9 @@ export class UnionSchema<
   }
 
   parse(v: unknown): $T {
-    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
-      return this.#checks.default;
+    if (typeof v === "undefined") {
+      if (typeof this.#checks.default !== "undefined") return this.#checks.default;
+      if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
     let isValid = false;
@@ -158,8 +160,9 @@ export class TupleSchema<
   }
 
   parse(v: unknown): $T {
-    if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
-      return this.#checks.default;
+    if (typeof v === "undefined") {
+      if (typeof this.#checks.default !== "undefined") return this.#checks.default;
+      if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
     if (!Array.isArray(v)) throw new MError("Expected a tuple (must be an array)");
