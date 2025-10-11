@@ -1,16 +1,19 @@
 import { MError } from "../error";
-import type { ObjectOutput, Resolve, ResolveTuple } from "../types/types.schema";
-import { MongsterSchemaBase } from "./base";
+import type { ObjectInput, ObjectOutput, Resolve, ResolveTuple } from "../types/types.schema";
+import { MongsterSchemaBase, WithDefaultSchema } from "./base";
 
 interface ObjectChecks<O> {
   default?: O;
+  defaultFn?: () => O;
 }
 
 export class ObjectSchema<
   T extends Record<string, MongsterSchemaBase<any>>,
   $T = Resolve<ObjectOutput<T>>,
-> extends MongsterSchemaBase<$T> {
+  $I = Resolve<ObjectInput<T>>,
+> extends MongsterSchemaBase<$T, $I> {
   declare $type: $T;
+  declare $input: $I;
 
   #shape: T;
   #checks: ObjectChecks<$T>;
@@ -21,8 +24,14 @@ export class ObjectSchema<
     this.#checks = checks;
   }
 
-  default(o: $T): ObjectSchema<T, $T> {
-    return new ObjectSchema(this.#shape, { ...this.#checks, default: o });
+  default(o: $T): WithDefaultSchema<$T> {
+    const objSchema = new ObjectSchema(this.#shape, { ...this.#checks, default: o });
+    return new WithDefaultSchema(objSchema);
+  }
+
+  defaultFn(fn: () => $T): WithDefaultSchema<$T> {
+    const objSchema = new ObjectSchema(this.#shape, { ...this.#checks, defaultFn: fn });
+    return new WithDefaultSchema(objSchema);
   }
 
   clone(): this {
@@ -54,13 +63,16 @@ export class ObjectSchema<
 
 interface UnionChecks<U> {
   default?: U;
+  defaultFn?: () => U;
 }
 
 export class UnionSchema<
   T extends MongsterSchemaBase<any>[],
   $T = T[number]["$type"],
-> extends MongsterSchemaBase<$T> {
+  $I = T[number]["$input"],
+> extends MongsterSchemaBase<$T, $I> {
   declare $type: $T;
+  declare $input: $I;
 
   #shapes: T;
   #checks: UnionChecks<$T>;
@@ -71,8 +83,14 @@ export class UnionSchema<
     this.#checks = checks;
   }
 
-  default(d: $T): UnionSchema<T> {
-    return new UnionSchema(this.#shapes, { ...this.#checks, default: d });
+  default(d: $T): WithDefaultSchema<$T> {
+    const unionSchema = new UnionSchema(this.#shapes, { ...this.#checks, default: d });
+    return new WithDefaultSchema(unionSchema);
+  }
+
+  defaultFn(fn: () => $T): WithDefaultSchema<$T> {
+    const unionSchema = new UnionSchema(this.#shapes, { ...this.#checks, defaultFn: fn });
+    return new WithDefaultSchema(unionSchema);
   }
 
   clone(): this {
@@ -105,15 +123,16 @@ export class UnionSchema<
 
 interface TupleChecks<T> {
   default?: T;
+  defaultFn?: () => T;
 }
 
 export class TupleSchema<
-  T extends MongsterSchemaBase<any>[],
-  $T = ResolveTuple<{
-    [K in keyof T]: T[K] extends MongsterSchemaBase<infer U> ? U : never;
-  }>,
-> extends MongsterSchemaBase<$T> {
+  T extends MongsterSchemaBase<any, any>[],
+  $T = ResolveTuple<{ [K in keyof T]: T[K]["$type"] }>,
+  $I = ResolveTuple<{ [K in keyof T]: T[K]["$input"] }>,
+> extends MongsterSchemaBase<$T, $I> {
   declare $type: $T;
+  declare $input: $I;
 
   #shapes: T;
   #checks: TupleChecks<$T>;
@@ -124,8 +143,14 @@ export class TupleSchema<
     this.#checks = checks;
   }
 
-  default(d: $T): TupleSchema<T, $T> {
-    return new TupleSchema(this.#shapes, { ...this.#checks, default: d });
+  default(d: $T): WithDefaultSchema<$T> {
+    const tupleSchema = new TupleSchema(this.#shapes, { ...this.#checks, default: d });
+    return new WithDefaultSchema(tupleSchema);
+  }
+
+  defaultFn(fn: () => $T): WithDefaultSchema<$T> {
+    const tupleSchema = new TupleSchema(this.#shapes, { ...this.#checks, defaultFn: fn });
+    return new WithDefaultSchema(tupleSchema);
   }
 
   clone(): this {

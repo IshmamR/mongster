@@ -1,4 +1,4 @@
-export interface MongsterIssue {
+export interface MIssue {
   path?: (string | number)[];
   message: string;
 }
@@ -7,17 +7,17 @@ export interface MongsterIssue {
  * Yes, it is the error class
  */
 export class MError extends Error {
-  issues: MongsterIssue[];
+  issues: MIssue[];
 
   constructor(issues: string, options?: ErrorOptions);
-  constructor(issues: MongsterIssue | MongsterIssue[], message?: string, options?: ErrorOptions);
+  constructor(issues: MIssue | MIssue[], message?: string, options?: ErrorOptions);
 
   constructor(
-    issues: string | MongsterIssue | MongsterIssue[],
+    issues: string | MIssue | MIssue[],
     arg2?: string | ErrorOptions,
     arg3?: ErrorOptions,
   ) {
-    let normalizedIssues: MongsterIssue[];
+    let normalizedIssues: MIssue[];
     let message: string;
     let options: ErrorOptions | undefined;
 

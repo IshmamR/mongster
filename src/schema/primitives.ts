@@ -1,16 +1,18 @@
 import { MError } from "../error";
 import type { SchemaMeta } from "../types/types.schema";
-import { MongsterSchemaBase } from "./base";
+import { MongsterSchemaBase, WithDefaultSchema } from "./base";
 
 interface NumberChecks<N> {
   min?: number;
   max?: number;
   enum?: number[];
   default?: N;
+  defaultFn?: () => N;
 }
 
-export class NumberSchema<TP extends number = number> extends MongsterSchemaBase<TP> {
+export class NumberSchema<TP extends number = number> extends MongsterSchemaBase<TP, TP> {
   declare $type: TP;
+  declare $input: TP;
 
   #checks: NumberChecks<TP>;
 
@@ -28,11 +30,20 @@ export class NumberSchema<TP extends number = number> extends MongsterSchemaBase
   }
 
   enum<E extends TP>(e: E[]): NumberSchema<E> {
-    return new NumberSchema({ ...this.#checks, enum: e }) as unknown as NumberSchema<E>;
+    return new NumberSchema({
+      ...this.#checks,
+      enum: e,
+    }) as unknown as NumberSchema<E>;
   }
 
-  default(d: TP): NumberSchema<TP> {
-    return new NumberSchema<TP>({ ...this.#checks, default: d });
+  default(d: TP): WithDefaultSchema<TP> {
+    const numberSchema = new NumberSchema<TP>({ ...this.#checks, default: d });
+    return new WithDefaultSchema(numberSchema);
+  }
+
+  defaultFn(fn: () => TP): WithDefaultSchema<TP> {
+    const numberSchema = new NumberSchema<TP>({ ...this.#checks, defaultFn: fn });
+    return new WithDefaultSchema(numberSchema);
   }
 
   clone(): this {
@@ -46,7 +57,7 @@ export class NumberSchema<TP extends number = number> extends MongsterSchemaBase
 
     if (typeof v !== "number") {
       if (typeof v === "undefined") {
-        throw new MError("Expected a number, but received undefined. Field is required.");
+        throw new MError("Expected a number, received undefined");
       }
       throw new MError("Expected a number");
     }
@@ -72,10 +83,12 @@ interface StringChecks<S> {
   enum?: string[];
   match?: RegExp;
   default?: S;
+  defaultFn?: () => S;
 }
 
-export class StringSchema<TP extends string = string> extends MongsterSchemaBase<TP> {
+export class StringSchema<TP extends string = string> extends MongsterSchemaBase<TP, TP> {
   declare $type: TP;
+  declare $input: TP;
 
   #checks: StringChecks<TP>;
 
@@ -92,16 +105,25 @@ export class StringSchema<TP extends string = string> extends MongsterSchemaBase
     return new StringSchema<TP>({ ...this.#checks, max: n });
   }
 
-  enum<E extends TP>(e: E[]): StringSchema<E> {
-    return new StringSchema({ ...this.#checks, enum: e }) as unknown as StringSchema<E>;
+  enum<E extends string>(e: E[]): StringSchema<E> {
+    return new StringSchema({
+      ...this.#checks,
+      enum: e,
+    }) as unknown as StringSchema<E>;
   }
 
   match(r: RegExp): StringSchema<TP> {
     return new StringSchema<TP>({ ...this.#checks, match: r });
   }
 
-  default(d: TP): StringSchema<TP> {
-    return new StringSchema<TP>({ ...this.#checks, default: d });
+  default(d: TP): WithDefaultSchema<TP> {
+    const stringSchema = new StringSchema<TP>({ ...this.#checks, default: d });
+    return new WithDefaultSchema(stringSchema);
+  }
+
+  defaultFn(fn: () => TP): WithDefaultSchema<TP> {
+    const stringSchema = new StringSchema<TP>({ ...this.#checks, defaultFn: fn });
+    return new WithDefaultSchema(stringSchema);
   }
 
   clone(): this {
@@ -142,10 +164,12 @@ export class StringSchema<TP extends string = string> extends MongsterSchemaBase
 
 interface BooleanChecks {
   default?: boolean;
+  defaultFn?: () => boolean;
 }
 
-export class BooleanSchema extends MongsterSchemaBase<boolean> {
+export class BooleanSchema extends MongsterSchemaBase<boolean, boolean> {
   declare $type: boolean;
+  declare $input: boolean;
 
   #checks: BooleanChecks;
 
@@ -154,8 +178,14 @@ export class BooleanSchema extends MongsterSchemaBase<boolean> {
     this.#checks = checks;
   }
 
-  default(d: boolean): BooleanSchema {
-    return new BooleanSchema({ ...this.#checks, default: d });
+  default(d: boolean): WithDefaultSchema<boolean> {
+    const booleanSchema = new BooleanSchema({ ...this.#checks, default: d });
+    return new WithDefaultSchema(booleanSchema);
+  }
+
+  defaultFn(fn: () => boolean): WithDefaultSchema<boolean> {
+    const booleanSchema = new BooleanSchema({ ...this.#checks, defaultFn: fn });
+    return new WithDefaultSchema(booleanSchema);
   }
 
   clone(): this {
@@ -182,10 +212,12 @@ interface DateChecks {
   min?: Date;
   max?: Date;
   default?: Date;
+  defaultFn?: () => Date;
 }
 
-export class DateSchema extends MongsterSchemaBase<Date> {
+export class DateSchema extends MongsterSchemaBase<Date, Date> {
   declare $type: Date;
+  declare $input: Date;
 
   #checks: DateChecks;
 
@@ -202,8 +234,14 @@ export class DateSchema extends MongsterSchemaBase<Date> {
     return new DateSchema({ ...this.#checks, max: d });
   }
 
-  default(d: Date): DateSchema {
-    return new DateSchema({ ...this.#checks, default: d });
+  default(d: Date): WithDefaultSchema<Date> {
+    const dateSchema = new DateSchema({ ...this.#checks, default: d });
+    return new WithDefaultSchema(dateSchema);
+  }
+
+  defaultFn(fn: () => Date): WithDefaultSchema<Date> {
+    const dateSchema = new DateSchema({ ...this.#checks, defaultFn: fn });
+    return new WithDefaultSchema(dateSchema);
   }
 
   clone(): this {

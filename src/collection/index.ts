@@ -27,7 +27,7 @@ import type {
   WithId,
   WithoutId,
 } from "mongodb";
-import type { Mongster } from "../mongster";
+import type { Mongster } from "../client";
 import { Query } from "../queries/find/Query";
 import type { MongsterSchema } from "../schema/base";
 import type { MongsterFilter, MongsterUpdateFilter } from "../types/types.filter";

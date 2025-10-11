@@ -1,6 +1,6 @@
 import type { Binary, Decimal128, Double, Int32, ObjectId } from "bson";
 import type { Filter } from "mongodb";
-import type { MongsterSchemaBase, OptionalSchema } from "../schema/base";
+import type { MongsterSchemaBase, OptionalSchema, WithDefaultSchema } from "../schema/base";
 import type { Prettify } from "./types.common";
 
 export type Primitives = string | number | boolean;
@@ -9,8 +9,6 @@ export type BsonTypes = ObjectId | Decimal128 | Double | Binary | Int32;
 export type Nullish = null | undefined;
 
 export type NoExpandType = Builtins | BsonTypes | Nullish;
-
-type _InferSchema<T> = T extends MongsterSchemaBase<infer U> ? U : never;
 
 export type ResolveTuple<T extends readonly unknown[]> = T extends readonly []
   ? readonly []
@@ -29,7 +27,7 @@ export type Resolve<T> = T extends NoExpandType
         : T;
 
 type RequiredOutputs<T extends Record<string, MongsterSchemaBase<any>>> = {
-  [K in keyof T as T[K] extends OptionalSchema<any> ? never : K]: _InferSchema<T[K]>;
+  [K in keyof T as T[K] extends OptionalSchema<any> ? never : K]: T[K]["$type"];
 };
 type OptionalOutputs<T extends Record<string, MongsterSchemaBase<any>>> = {
   [K in keyof T as T[K] extends OptionalSchema<any> ? K : never]?: T[K] extends OptionalSchema<
@@ -40,6 +38,18 @@ type OptionalOutputs<T extends Record<string, MongsterSchemaBase<any>>> = {
 };
 export type ObjectOutput<T extends Record<string, MongsterSchemaBase<any>>> = RequiredOutputs<T> &
   OptionalOutputs<T>;
+
+type RequiredInputs<T extends Record<string, MongsterSchemaBase<any>>> = {
+  [K in keyof T as T[K] extends OptionalSchema<any> | WithDefaultSchema<any>
+    ? never
+    : K]: T[K]["$input"];
+};
+type DefaultInputs<T extends Record<string, MongsterSchemaBase<any>>> = {
+  [K in keyof T as T[K] extends WithDefaultSchema<any> ? K : never]?: T[K]["$input"];
+};
+export type ObjectInput<T extends Record<string, MongsterSchemaBase<any>>> = RequiredInputs<T> &
+  OptionalOutputs<T> &
+  DefaultInputs<T>;
 
 export type ValidatorFunc<T> = (v: T) => boolean;
 
@@ -53,7 +63,10 @@ export type IndexOptions<Collection> = {
   default_language?: string;
   weights?: any;
 };
-export type SchemaMeta<Collection> = { index?: IndexDirection; options: IndexOptions<Collection> };
+export type SchemaMeta<Collection> = {
+  index?: IndexDirection;
+  options: IndexOptions<Collection>;
+};
 
 export type TimestampKeys = "createdAt" | "updatedAt";
 
@@ -72,6 +85,6 @@ export type InferSchemaType<MS extends MongsterSchemaBase<any>> = Prettify<
 
 type ContainsAll<T, U> = Exclude<U, T> extends never ? true : false;
 export type InferSchemaInputType<MS extends MongsterSchemaBase<any>> =
-  ContainsAll<keyof MS["$type"], TimestampKeys> extends true
-    ? Prettify<Omit<MS["$type"], TimestampKeys> & { [K in TimestampKeys]?: Date }>
-    : MS["$type"];
+  ContainsAll<keyof MS["$input"], TimestampKeys> extends true
+    ? Prettify<Omit<MS["$input"], TimestampKeys> & { [K in TimestampKeys]?: Date }>
+    : MS["$input"];

@@ -7,7 +7,7 @@ interface MongsterClientOptions extends MongoClientOptions {
   retryDelayMs?: number;
 }
 
-export class Mongster {
+export class MongsterClient {
   #uri: string | undefined;
   #options: MongsterClientOptions = {};
   #client: MongoClient | undefined;

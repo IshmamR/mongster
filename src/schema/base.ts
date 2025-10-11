@@ -5,6 +5,7 @@ import type {
   IndexDirection,
   IndexOptions,
   MongsterSchemaOptions,
+  ObjectInput,
   ObjectOutput,
   Resolve,
   SchemaMeta,
@@ -12,8 +13,9 @@ import type {
   WithTimestamps,
 } from "../types/types.schema";
 
-export abstract class MongsterSchemaBase<T> {
+export abstract class MongsterSchemaBase<T, I = T & any> {
   declare $type: T;
+  declare $input: I;
 
   #meta: SchemaMeta<T> = { options: {} };
 
@@ -23,13 +25,17 @@ export abstract class MongsterSchemaBase<T> {
   getMeta(): SchemaMeta<T> {
     return this.#meta;
   }
-  setMeta(meta: SchemaMeta<T>) {
+  setMeta(meta: SchemaMeta<T>): void {
     this.#meta = meta;
   }
 
   index(direction: IndexDirection = 1): this {
     const clone = this.clone();
-    clone.#meta = { ...this.#meta, options: { ...this.#meta.options }, index: direction };
+    clone.#meta = {
+      ...this.#meta,
+      options: { ...this.#meta.options },
+      index: direction,
+    };
     return clone;
   }
 
@@ -65,38 +71,47 @@ export abstract class MongsterSchemaBase<T> {
 
   hashedIndex(): this {
     const clone = this.clone();
-    clone.#meta = { ...this.#meta, options: { ...this.#meta.options }, index: "hashed" };
+    clone.#meta = {
+      ...this.#meta,
+      options: { ...this.#meta.options },
+      index: "hashed",
+    };
     return clone;
   }
 
   textIndex(): this {
     const clone = this.clone();
-    clone.#meta = { ...this.#meta, options: { ...this.#meta.options }, index: "text" };
+    clone.#meta = {
+      ...this.#meta,
+      options: { ...this.#meta.options },
+      index: "text",
+    };
     return clone;
   }
 
-  optional() {
+  optional(): OptionalSchema<T> {
     return new OptionalSchema<T>(this);
   }
 
-  nullable() {
+  nullable(): NullableSchema<T> {
     return new NullableSchema<T>(this);
   }
 
-  array() {
-    return new ArraySchema<T>(this);
+  array(): ArraySchema<T, I> {
+    return new ArraySchema<T, I>(this);
   }
 
   /**
    * Custom validation method for your schema
    */
-  validate(validator: ValidatorFunc<T>, message?: string) {
+  validate(validator: ValidatorFunc<T>, message?: string): CustomValidationSchema<T> {
     return new CustomValidationSchema<T>(this, validator, message);
   }
 }
 
-class CustomValidationSchema<T> extends MongsterSchemaBase<T> {
+class CustomValidationSchema<T> extends MongsterSchemaBase<T, T> {
   declare $type: T;
+  declare $input: T;
 
   // @internal used internally
   protected inner: MongsterSchemaBase<T>;
@@ -123,8 +138,30 @@ class CustomValidationSchema<T> extends MongsterSchemaBase<T> {
   }
 }
 
-export class OptionalSchema<T> extends MongsterSchemaBase<T | undefined> {
+export class WithDefaultSchema<T> extends MongsterSchemaBase<T, T | undefined> {
+  declare $type: T;
+  declare $input: T | undefined;
+
+  // @internal used internally
+  protected inner: MongsterSchemaBase<T>;
+
+  constructor(inner: MongsterSchemaBase<T>) {
+    super();
+    this.inner = inner;
+  }
+
+  clone(): this {
+    return new WithDefaultSchema(this.inner) as this;
+  }
+
+  parse(v: unknown): T {
+    return this.inner.parse(v);
+  }
+}
+
+export class OptionalSchema<T> extends MongsterSchemaBase<T | undefined, T | undefined> {
   declare $type: T | undefined;
+  declare $input: T | undefined;
 
   // @internal used internally
   protected inner: MongsterSchemaBase<T>;
@@ -143,8 +180,9 @@ export class OptionalSchema<T> extends MongsterSchemaBase<T | undefined> {
   }
 }
 
-export class NullableSchema<T> extends MongsterSchemaBase<T | null> {
+export class NullableSchema<T> extends MongsterSchemaBase<T | null, T | null> {
   declare $type: T | null;
+  declare $input: T | null;
 
   // @internal used internally
   protected inner: MongsterSchemaBase<T>;
@@ -167,30 +205,38 @@ interface ArrayChecks<A> {
   min?: number;
   max?: number;
   default?: A;
+  defaultFn?: () => A;
 }
 
-export class ArraySchema<T> extends MongsterSchemaBase<T[]> {
+export class ArraySchema<T, I> extends MongsterSchemaBase<T[], I[]> {
   declare $type: T[];
+  declare $input: I[];
 
-  #shapes: MongsterSchemaBase<T>;
+  #shapes: MongsterSchemaBase<T, I>;
   #checks: ArrayChecks<T[]>;
 
-  constructor(shapes: MongsterSchemaBase<T>, checks: ArrayChecks<T[]> = {}) {
+  constructor(shapes: MongsterSchemaBase<T, I>, checks: ArrayChecks<T[]> = {}) {
     super();
     this.#shapes = shapes;
     this.#checks = checks;
   }
 
-  min(n: number): ArraySchema<T> {
+  min(n: number): ArraySchema<T, I> {
     return new ArraySchema(this.#shapes, { ...this.#checks, min: n });
   }
 
-  max(n: number): ArraySchema<T> {
+  max(n: number): ArraySchema<T, I> {
     return new ArraySchema(this.#shapes, { ...this.#checks, max: n });
   }
 
-  default(d: T[]): ArraySchema<T> {
-    return new ArraySchema(this.#shapes, { ...this.#checks, default: d });
+  default(d: T[]): WithDefaultSchema<T[]> {
+    const arrSchema = new ArraySchema(this.#shapes, { ...this.#checks, default: d });
+    return new WithDefaultSchema(arrSchema);
+  }
+
+  defaultFn(fn: () => T[]): WithDefaultSchema<T[]> {
+    const arrSchema = new ArraySchema(this.#shapes, { ...this.#checks, defaultFn: fn });
+    return new WithDefaultSchema(arrSchema);
   }
 
   clone(): this {
@@ -230,8 +276,10 @@ export class ArraySchema<T> extends MongsterSchemaBase<T[]> {
 export class MongsterSchema<
   T extends Record<string, MongsterSchemaBase<any>>,
   $T = Resolve<ObjectOutput<T>>,
+  $I = Resolve<ObjectInput<T>>,
 > extends MongsterSchemaBase<$T> {
   declare $type: $T;
+  declare $input: $I;
   declare $brand: "MongsterSchema";
 
   protected rootIndexes: IndexSpecification[] = [];

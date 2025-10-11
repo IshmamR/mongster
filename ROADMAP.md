@@ -3,133 +3,154 @@
 ## ✅ Completed (v0.0.1)
 
 ### Core Schema System
-- [x] Schema definition with `createSchema()`
-- [x] Rich type system (primitives, arrays, nested documents, unions)
-- [x] Type inference engine (`InferInputType`, `InferDocumentType`)
-- [x] Nested document support with subdocument arrays
-- [x] Union types with proper TypeScript inference
-- [x] Field options (required, nullable, default values)
-
-### Query System
-- [x] Model creation with `createModel()`
-- [x] Chainable query API (`.find()`, `.findOne()`)
-- [x] Type-safe filtering with MongoDB operators
-- [x] Sorting with nested path support (`.sort()`)
-- [x] Field projection with type inference (`.project()`)
-- [x] Pagination (`.limit()`, `.skip()`)
-- [x] Nested path queries (`"address.city"`)
-- [x] Query execution (`.exec()`)
+- [x] **Complete schema validation system** with immutable fluent API
+- [x] **Primitive types**: `string()`, `number()`, `boolean()`, `date()` with constraints
+- [x] **BSON types**: `objectId()`, `decimal128()`, `binary()` with MongoDB-specific features
+- [x] **Composite types**: `array()`, `tuple()`, `union()`, `object()` with deep nesting
+- [x] **Schema wrappers**: `optional()`, `nullable()` with proper type inference
+- [x] **Type-safe enums** with literal type inference (`string().enum(['a', 'b'])`)
+- [x] **Custom validation** with transformed value validation
+- [x] **Default values** with type safety and auto-generation (ObjectId)
+- [x] **Comprehensive error handling** with detailed validation messages
 
 ### MongoDB Integration
-- [x] Connection management with `createConnection()`
-- [x] Official MongoDB driver integration
-- [x] Collection operations with proper typing
+- [x] **Index management**: `index()`, `uniqueIndex()`, `sparseIndex()`, `partialIndex()`
+- [x] **Specialized indexes**: `hashedIndex()`, `textIndex()`, `ttl()` (TTL indexes)
+- [x] **Index metadata system** with deep cloning and proper inheritance
+- [x] **Index collection** with dot notation for nested fields
+- [x] **BSON subtype support** with validation for Binary data
+
+### Type System & Architecture
+- [x] **Immutable schema design** with proper clone patterns
+- [x] **Private field encapsulation** with `#checks` and `#meta`
+- [x] **Generic type constraints** for enum type narrowing
+- [x] **Consistent API patterns** across all schema types
+- [x] **Meta helper functions** for clean code organization
+- [x] **Comprehensive test suite** (100+ tests covering all edge cases)
 
 ## 🚧 Current Focus (v0.1.0)
 
-### Query Enhancements
-- [ ] Selection API improvements (`.select()`)
-- [ ] Aggregation pipeline support
-- [ ] Index management helpers
-- [ ] Advanced MongoDB operators ($regex, $exists, etc.)
+### Query System Foundation
+- [ ] **Model creation** with `createModel()` integration
+- [ ] **Basic CRUD operations**: `find()`, `findOne()`, `insertOne()`, `updateOne()`, `deleteOne()`
+- [ ] **Type-safe query builders** with MongoDB operator support
+- [ ] **Query execution engine** with proper error handling
+- [ ] **Connection management** and database integration
 
-### Type System Improvements
-- [ ] Better error messages for complex type failures
-- [ ] Performance optimization for deep nested types
-- [ ] Support for self-referencing schemas
-- [ ] Conditional field types
-
-### Developer Experience
-- [ ] Comprehensive test suite
-- [ ] Better documentation with more examples
-- [ ] Error handling and validation
-- [ ] Performance benchmarks
+### Core Features Pipeline
+- [ ] **Hook system** (pre/post save, validate, remove, find)
+- [ ] **Type-safe aggregation builders** with pipeline inference
+- [ ] **Transaction support** with easy DX and automatic session management
+- [ ] **Native schema validation** (opt-in MongoDB validation integration)
+- [ ] **Query caching** (opt-in with configurable strategies)  
+- [ ] **Intelligent index management** (creation/deletion based on queries)
 
 ## 📋 Short-term (v0.2.0)
 
-### CRUD Operations
-- [ ] Insert operations (`.insertOne()`, `.insertMany()`)
-- [ ] Update operations (`.updateOne()`, `.updateMany()`)
-- [ ] Delete operations (`.deleteOne()`, `.deleteMany()`)
-- [ ] Upsert support
+### Hook System
+- [ ] **Pre-hooks**: `pre('save')`, `pre('validate')`, `pre('remove')`, `pre('find')`
+- [ ] **Post-hooks**: `post('save')`, `post('validate')`, `post('remove')`, `post('find')`
+- [ ] **Hook composition** and middleware pattern support
+- [ ] **Error handling** in hooks with proper propagation
+- [ ] **Async hook support** with Promise-based execution
 
-### Advanced Queries
-- [ ] Aggregation framework integration
-- [ ] Text search support
-- [ ] Geospatial queries
-- [ ] Complex filtering with $lookup equivalent
+### Type-Safe Aggregation
+- [ ] **Pipeline builder** with fluent API (`$match`, `$group`, `$sort`, etc.)
+- [ ] **Type inference** through pipeline stages
+- [ ] **Aggregation result typing** with proper return types
+- [ ] **Pipeline optimization** and validation
+- [ ] **Complex aggregations** with `$lookup`, `$unwind`, `$facet`
 
-### Validation & Safety
-- [ ] Optional runtime schema validation
-- [ ] Input sanitization
-- [ ] Query optimization hints
-- [ ] Connection pooling management
+### Transaction Management
+- [ ] **Easy transaction API** with automatic session handling
+- [ ] **Transaction retries** with configurable strategies
+- [ ] **Nested transaction support** with savepoints
+- [ ] **Transaction-aware hooks** and validation
+- [ ] **Rollback mechanisms** with detailed error reporting
 
 ## 🎯 Medium-term (v0.3.0+)
 
-### Enterprise Features
-- [ ] Transaction support with sessions
-- [ ] Change streams integration
-- [ ] Replica set awareness
-- [ ] Sharding considerations
+### Advanced Features
+- [ ] **Native MongoDB validation** integration with schema compilation
+- [ ] **Query caching system** with Redis/memory backends and TTL support
+- [ ] **Intelligent indexing** with query pattern analysis and auto-optimization
+- [ ] **Schema evolution** tools with migration generation
+- [ ] **Change streams** integration with real-time updates
 
-### Schema Evolution
-- [ ] Schema migrations
-- [ ] Versioning support
-- [ ] Backward compatibility helpers
-- [ ] Schema diffing tools
+### Enterprise Features  
+- [ ] **Advanced transaction patterns** (distributed, cross-collection)
+- [ ] **Connection pooling** optimization and monitoring
+- [ ] **Replica set awareness** with read preference routing
+- [ ] **Sharding support** with proper query distribution
+- [ ] **Performance monitoring** with query analysis and bottleneck detection
 
-### Performance & Monitoring
-- [ ] Query performance monitoring
-- [ ] Connection health checks
-- [ ] Metrics and observability
-- [ ] Query caching strategies
+### Developer Experience
+- [ ] **Advanced error messages** with suggestions and context
+- [ ] **Schema debugging tools** with validation tracing
+- [ ] **Query optimization hints** and performance insights
+- [ ] **Migration utilities** from other ODMs (Mongoose, Prisma)
+- [ ] **CLI tools** for schema management and code generation
 
-## 🚀 Long-term Vision
+## 🚀 Long-term Vision (v1.0.0+)
 
 ### Advanced Type System
-- [ ] Schema inheritance and composition
-- [ ] Conditional schemas based on field values
-- [ ] Dynamic schema resolution
-- [ ] Schema validation at runtime
+- [ ] **Schema inheritance** and composition patterns
+- [ ] **Conditional schemas** based on discriminated unions
+- [ ] **Self-referencing schemas** with circular reference handling
+- [ ] **Dynamic schema resolution** with runtime type checking
+- [ ] **Schema polymorphism** with proper type discrimination
 
 ### Developer Ecosystem
-- [ ] CLI tools for schema management
-- [ ] VS Code extension for schema intelligence
-- [ ] Migration tools from other ODMs
-- [ ] Integration with popular frameworks (Next.js, etc.)
+- [ ] **VS Code extension** with schema IntelliSense and validation
+- [ ] **Framework integrations** (Next.js, Nuxt, SvelteKit, etc.)
+- [ ] **GraphQL schema generation** from Mongster schemas
+- [ ] **OpenAPI/JSON Schema** export for API documentation
+- [ ] **Testing utilities** with in-memory MongoDB and fixtures
 
-### Testing & Quality
-- [ ] In-memory MongoDB adapter for testing
-- [ ] Property-based testing utilities
-- [ ] Performance regression testing
-- [ ] Comprehensive benchmarking suite
+### Performance & Scalability
+- [ ] **Query result streaming** for large datasets
+- [ ] **Batch operations** with intelligent batching strategies
+- [ ] **Connection multiplexing** and advanced pooling
+- [ ] **Query plan caching** and optimization
+- [ ] **Memory-efficient schema compilation** for large codebases
 
-### Community & Integrations
-- [ ] Plugin system for extensibility
-- [ ] Integration with validation libraries (Zod, Yup)
-- [ ] ORM-style relationships (opt-in)
-- [ ] GraphQL schema generation
+### Enterprise & Production
+- [ ] **Multi-tenant support** with schema isolation
+- [ ] **Audit logging** with change tracking
+- [ ] **Data encryption** at rest and in transit
+- [ ] **Compliance tools** (GDPR, HIPAA) with data masking
+- [ ] **Observability integration** (Prometheus, Grafana, DataDog)
 
 ## 📝 Notes
 
-### Type System Constraints
-- Recursive types are limited to depth 3-5 to maintain compilation performance
-- Complex union types may require manual type assertions in edge cases
-- Template literal types for nested paths have inherent TypeScript limits
+### Current Architecture Strengths
+- **Immutable design**: All schema methods return new instances, preventing accidental mutations
+- **Type safety**: Full TypeScript inference with literal types for enums and constraints
+- **MongoDB-native**: Built around MongoDB's strengths rather than fighting them
+- **Performance-first**: Minimal runtime overhead with compile-time type checking
+- **Developer experience**: Fluent API with comprehensive error messages
 
-### MongoDB Driver Compatibility
-- Built on MongoDB Node.js driver v6.x
-- Supports MongoDB 4.4+ features
-- Maintains compatibility with official driver APIs
+### Technical Constraints
+- **TypeScript limits**: Complex recursive types limited to maintain compilation speed
+- **MongoDB compatibility**: Requires MongoDB 4.4+ for full feature support
+- **Node.js driver**: Built on official MongoDB Node.js driver v6.x for reliability
+- **Type inference depth**: Nested type inference limited to prevent infinite recursion
+
+### Design Philosophy
+- **Explicit over implicit**: Clear, predictable behavior over magic
+- **Type safety first**: Compile-time safety with optional runtime validation
+- **MongoDB semantics**: Embrace MongoDB's document model and query language
+- **Progressive enhancement**: Core features work simply, advanced features available when needed
+- **Zero-cost abstractions**: Abstractions should not impact runtime performance
 
 ### Breaking Changes Policy
-- Pre-1.0: Breaking changes allowed with clear migration guides
-- Post-1.0: Semantic versioning with deprecated feature warnings
-- Focus on compile-time detection of breaking changes
+- **Pre-1.0**: Breaking changes allowed with migration guides and deprecation warnings
+- **Post-1.0**: Strict semantic versioning with backwards compatibility guarantees
+- **Deprecation cycle**: 2 minor versions warning period before removal
+- **Migration tools**: Automated migration utilities for major version upgrades
 
 ### Performance Targets
-- Sub-1ms query building overhead
-- Minimal runtime type checking
-- Efficient memory usage for large schemas
-- Fast TypeScript compilation even with complex schemas
+- **Schema compilation**: < 1ms for typical schemas
+- **Query building**: < 100μs overhead per query
+- **Memory usage**: < 1KB per schema instance
+- **Type checking**: No runtime type checking unless explicitly enabled

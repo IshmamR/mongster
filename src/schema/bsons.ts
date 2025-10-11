@@ -1,13 +1,15 @@
 import { Binary, Decimal128, ObjectId } from "bson";
 import { MError } from "../error";
-import { MongsterSchemaBase } from "./base";
+import { MongsterSchemaBase, WithDefaultSchema } from "./base";
 
 interface ObjectIdChecks {
   default?: "generate" | ObjectId;
+  defaultFn?: () => ObjectId;
 }
 
-export class ObjectIdSchema extends MongsterSchemaBase<ObjectId> {
+export class ObjectIdSchema extends MongsterSchemaBase<ObjectId, ObjectId> {
   declare $type: ObjectId;
+  declare $input: ObjectId;
 
   #checks: ObjectIdChecks;
 
@@ -16,8 +18,14 @@ export class ObjectIdSchema extends MongsterSchemaBase<ObjectId> {
     this.#checks = checks;
   }
 
-  default(d: "generate" | ObjectId): ObjectIdSchema {
-    return new ObjectIdSchema({ ...this.#checks, default: d });
+  default(d: "generate" | ObjectId): WithDefaultSchema<ObjectId> {
+    const objIdSchema = new ObjectIdSchema({ ...this.#checks, default: d });
+    return new WithDefaultSchema(objIdSchema);
+  }
+
+  defaultFn(fn: () => ObjectId): WithDefaultSchema<ObjectId> {
+    const objIdSchema = new ObjectIdSchema({ ...this.#checks, defaultFn: fn });
+    return new WithDefaultSchema(objIdSchema);
   }
 
   clone(): this {
@@ -37,10 +45,12 @@ export class ObjectIdSchema extends MongsterSchemaBase<ObjectId> {
 
 interface Decimal128Checks {
   default?: Decimal128;
+  defaultFn?: () => Decimal128;
 }
 
-export class Decimal128Schema extends MongsterSchemaBase<Decimal128> {
+export class Decimal128Schema extends MongsterSchemaBase<Decimal128, Decimal128> {
   declare $type: Decimal128;
+  declare $input: Decimal128;
 
   #checks: Decimal128Checks;
 
@@ -49,8 +59,14 @@ export class Decimal128Schema extends MongsterSchemaBase<Decimal128> {
     this.#checks = checks;
   }
 
-  default(d: Decimal128): Decimal128Schema {
-    return new Decimal128Schema({ ...this.#checks, default: d });
+  default(d: Decimal128): WithDefaultSchema<Decimal128> {
+    const decSchema = new Decimal128Schema({ ...this.#checks, default: d });
+    return new WithDefaultSchema(decSchema);
+  }
+
+  defaultFn(fn: () => Decimal128): WithDefaultSchema<Decimal128> {
+    const decSchema = new Decimal128Schema({ ...this.#checks, defaultFn: fn });
+    return new WithDefaultSchema(decSchema);
   }
 
   clone(): this {
@@ -86,40 +102,46 @@ function isValidBsonSubtype(x: unknown): x is BSONSubtype {
   return typeof x === "number" && bsonSubTypes.includes(x as BSONSubtype);
 }
 
-type BinaryInput = Buffer | Uint8Array | Binary;
-
-interface BinaryChecks<B> {
+interface BinaryChecks {
   min?: number;
   max?: number;
   subType: BSONSubtype;
-  default?: B;
+  default?: Binary;
+  defaultFn?: () => Binary;
 }
 
-export class BinarySchema<TA extends BinaryInput = BinaryInput> extends MongsterSchemaBase<TA> {
-  declare $type: TA;
+export class BinarySchema extends MongsterSchemaBase<Binary, Binary> {
+  declare $type: Binary;
+  declare $input: Binary;
 
-  #checks: BinaryChecks<TA>;
+  #checks: BinaryChecks;
 
-  constructor(checks: BinaryChecks<TA> = { subType: Binary.SUBTYPE_DEFAULT }) {
+  constructor(checks: BinaryChecks = { subType: Binary.SUBTYPE_DEFAULT }) {
     super();
     this.#checks = checks;
   }
 
-  min(n: number): BinarySchema<TA> {
-    return new BinarySchema<TA>({ ...this.#checks, min: n });
+  min(n: number): BinarySchema {
+    return new BinarySchema({ ...this.#checks, min: n });
   }
 
-  max(n: number): BinarySchema<TA> {
+  max(n: number): BinarySchema {
     return new BinarySchema({ ...this.#checks, max: n });
   }
 
-  bsonSubType(b: BSONSubtype): BinarySchema<TA> {
+  bsonSubType(b: BSONSubtype): BinarySchema {
     if (!isValidBsonSubtype(b)) throw new MError(`Invalid BSON subtype argument: ${b}`);
     return new BinarySchema({ ...this.#checks, subType: b });
   }
 
-  default(d: TA): BinarySchema<TA> {
-    return new BinarySchema({ ...this.#checks, default: d });
+  default(d: Binary): WithDefaultSchema<Binary> {
+    const binSchema = new BinarySchema({ ...this.#checks, default: d });
+    return new WithDefaultSchema(binSchema);
+  }
+
+  defaultFn(fn: () => Binary): WithDefaultSchema<Binary> {
+    const binSchema = new BinarySchema({ ...this.#checks, defaultFn: fn });
+    return new WithDefaultSchema(binSchema);
   }
 
   clone(): this {
@@ -136,7 +158,7 @@ export class BinarySchema<TA extends BinaryInput = BinaryInput> extends Mongster
     throw new MError("Expected a (Binary | Buffer)");
   }
 
-  parse(v: unknown): TA {
+  parse(v: unknown): Binary {
     if (typeof v === "undefined" && typeof this.#checks.default !== "undefined") {
       v = this.#checks.default;
     }
@@ -156,9 +178,9 @@ export class BinarySchema<TA extends BinaryInput = BinaryInput> extends Mongster
           `Invalid Binary subtype: expected ${this.#checks.subType}, got ${v.sub_type}`,
         );
       }
-      return v as TA;
+      return v;
     }
 
-    return new Binary(buf, this.#checks.subType) as TA;
+    return new Binary(buf, this.#checks.subType);
   }
 }

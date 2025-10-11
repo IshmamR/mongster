@@ -1,7 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 import { Binary, Decimal128, ObjectId } from "bson";
-import { MongsterSchemaBuilder } from "../src/schema/index";
 import { MError } from "../src/error";
+import { MongsterSchemaBuilder } from "../src/schema";
+import type { InferSchemaInputType, InferSchemaType } from "../src/types/types.schema";
 
 const M = new MongsterSchemaBuilder();
 
@@ -139,11 +140,10 @@ describe("Primitive Schemas", () => {
 
   describe("DateSchema", () => {
     test("should parse valid dates", () => {
-      const date = new Date("2023-01-01");
       const schema = M.date();
-
+      const date = new Date("2025-01-01");
       expect(schema.parse(date)).toEqual(date);
-      expect(schema.parse("2023-01-01")).toEqual(new Date("2023-01-01"));
+      expect(schema.parse("2025-01-01")).toEqual(new Date("2025-01-01"));
       expect(schema.parse(1672531200000)).toEqual(new Date(1672531200000));
     });
 
@@ -155,29 +155,29 @@ describe("Primitive Schemas", () => {
     });
 
     test("should validate min date", () => {
-      const minDate = new Date("2023-01-01");
+      const minDate = new Date("2025-01-01");
       const schema = M.date().min(minDate);
 
-      expect(schema.parse(new Date("2023-06-01"))).toEqual(new Date("2023-06-01"));
+      expect(schema.parse(new Date("2025-06-01"))).toEqual(new Date("2025-06-01"));
       expect(schema.parse(minDate)).toEqual(minDate);
       expect(() => schema.parse(new Date("2022-12-31"))).toThrow(
-        "Value must be after or equal to 2023-01-01T00:00:00.000Z",
+        "Value must be after or equal to 2025-01-01T00:00:00.000Z",
       );
     });
 
     test("should validate max date", () => {
-      const maxDate = new Date("2023-12-31");
+      const maxDate = new Date("2025-12-31");
       const schema = M.date().max(maxDate);
 
-      expect(schema.parse(new Date("2023-06-01"))).toEqual(new Date("2023-06-01"));
+      expect(schema.parse(new Date("2025-06-01"))).toEqual(new Date("2025-06-01"));
       expect(schema.parse(maxDate)).toEqual(maxDate);
-      expect(() => schema.parse(new Date("2024-01-01"))).toThrow(
-        "Value must be before or equal to 2023-12-31T00:00:00.000Z",
+      expect(() => schema.parse(new Date("2026-01-01"))).toThrow(
+        "Value must be before or equal to 2025-12-31T00:00:00.000Z",
       );
     });
 
     test("should handle default values", () => {
-      const defaultDate = new Date("2023-01-01");
+      const defaultDate = new Date("2025-01-01");
       const schema = M.date().default(defaultDate);
       expect(schema.parse(undefined)).toEqual(defaultDate);
     });
@@ -239,6 +239,7 @@ describe("BSON Schemas", () => {
       const buffer = Buffer.from("hello");
       const result = schema.parse(buffer);
       expect(result).toBeInstanceOf(Binary);
+      expect(result.buffer).toEqual(buffer);
     });
 
     test("should parse Uint8Array", () => {
@@ -246,13 +247,14 @@ describe("BSON Schemas", () => {
       const uint8Array = new Uint8Array([1, 2, 3, 4]);
       const result = schema.parse(uint8Array);
       expect(result).toBeInstanceOf(Binary);
+      expect(result.buffer.toBase64()).toEqual(uint8Array.toBase64());
     });
 
     test("should parse Binary", () => {
       const schema = M.binary();
       const binary = new Binary(Buffer.from("test"));
       const result = schema.parse(binary);
-      expect(result).toBe(binary);
+      expect(result).toEqual(binary);
     });
 
     test("should parse number array", () => {
@@ -260,6 +262,7 @@ describe("BSON Schemas", () => {
       const numberArray = [72, 101, 108, 108, 111];
       const result = schema.parse(numberArray);
       expect(result).toBeInstanceOf(Binary);
+      expect(result.buffer.toBase64()).toEqual(new Uint8Array(numberArray).toBase64());
     });
 
     test("should reject invalid types", () => {
@@ -324,7 +327,9 @@ describe("Optional and Nullable Wrappers", () => {
 
       expect(schema.parse(undefined)).toBeUndefined();
       expect(schema.parse({ name: "John", age: 30 })).toEqual({ name: "John", age: 30 });
-      expect(() => schema.parse({ name: "John" })).toThrow();
+      expect(() => schema.parse({ name: "John" })).toThrow(
+        "age: Expected a number, received undefined",
+      );
     });
   });
 
@@ -484,19 +489,19 @@ describe("Array Schemas", () => {
 describe("Tuple Schemas", () => {
   describe("TupleSchema", () => {
     test("should parse valid tuples", () => {
-      const schema = M.tuple(M.string(), M.number(), M.boolean());
+      const schema = M.tuple([M.string(), M.number(), M.boolean()]);
       expect(schema.parse(["hello", 42, true])).toEqual(["hello", 42, true]);
     });
 
     test("should reject non-arrays", () => {
-      const schema = M.tuple(M.string(), M.number());
+      const schema = M.tuple([M.string(), M.number()]);
       expect(() => schema.parse("not a tuple")).toThrow("Expected a tuple (must be an array)");
       expect(() => schema.parse({})).toThrow("Expected a tuple (must be an array)");
       expect(() => schema.parse(null)).toThrow("Expected a tuple (must be an array)");
     });
 
     test("should validate exact length", () => {
-      const schema = M.tuple(M.string(), M.number());
+      const schema = M.tuple([M.string(), M.number()]);
       expect(() => schema.parse(["hello"])).toThrow(
         "Expected tuple of length 2, received of length 1",
       );
@@ -507,18 +512,18 @@ describe("Tuple Schemas", () => {
     });
 
     test("should validate item types at correct positions", () => {
-      const schema = M.tuple(M.string(), M.number(), M.boolean());
+      const schema = M.tuple([M.string(), M.number(), M.boolean()]);
       expect(() => schema.parse([42, "hello", true])).toThrow("[0] Expected a string");
       expect(() => schema.parse(["hello", "world", true])).toThrow("[1] Expected a number");
       expect(() => schema.parse(["hello", 42, "not boolean"])).toThrow("[2] Expected a boolean");
     });
 
     test("should work with complex schemas", () => {
-      const schema = M.tuple(
+      const schema = M.tuple([
         M.object({ name: M.string() }),
         M.array(M.number()),
         M.string().optional(),
-      );
+      ]);
 
       expect(schema.parse([{ name: "Alice" }, [1, 2, 3], undefined])).toEqual([
         { name: "Alice" },
@@ -531,13 +536,13 @@ describe("Tuple Schemas", () => {
 
     test("should handle default values", () => {
       const defaultTuple: [string, number] = ["default", 0];
-      const schema = M.tuple(M.string(), M.number()).default(defaultTuple);
+      const schema = M.tuple([M.string(), M.number()]).default(defaultTuple);
       expect(schema.parse(undefined)).toEqual(defaultTuple);
       expect(schema.parse(["custom", 42])).toEqual(["custom", 42]);
     });
 
     test("should work with nested tuples", () => {
-      const schema = M.tuple(M.string(), M.tuple(M.number(), M.boolean()));
+      const schema = M.tuple([M.string(), M.tuple([M.number(), M.boolean()])]);
 
       expect(schema.parse(["hello", [42, true]])).toEqual(["hello", [42, true]]);
       expect(() => schema.parse(["hello", [42, "not boolean"]])).toThrow();
@@ -546,7 +551,7 @@ describe("Tuple Schemas", () => {
 
   describe("fixedArrayOf method", () => {
     test("should work same as tuple", () => {
-      const schema = M.fixedArrayOf([M.string(), M.number(), M.boolean()]);
+      const schema = M.fixedArrayOf(M.string(), M.number(), M.boolean());
       expect(schema.parse(["hello", 42, true])).toEqual(["hello", 42, true]);
       expect(() => schema.parse(["hello", 42])).toThrow(
         "Expected tuple of length 3, received of length 2",
@@ -674,7 +679,7 @@ describe("Object Schemas", () => {
       });
 
       expect(() => schema.parse({ name: "Alice" })).toThrow(
-        "age: Expected a number, but received undefined. Field is required.",
+        "age: Expected a number, received undefined",
       );
       expect(() => schema.parse({ age: 30 })).toThrow(
         "name: Expected a string, but received undefined. Field is required.",
@@ -695,12 +700,18 @@ describe("Object Schemas", () => {
           }),
         }),
         metadata: M.object({
-          created: M.date(),
+          created: M.date().default(new Date()),
           tags: M.array(M.string()),
         }),
       });
 
-      const validData = {
+      type TInput = InferSchemaInputType<typeof schema>;
+      expectTypeOf<TInput>().toEqualTypeOf<{
+        user: { name: string; contact: { email: string; phone?: string | undefined } };
+        metadata: { created?: Date | undefined; tags: string[] };
+      }>();
+
+      const inputData = {
         user: {
           name: "Alice",
           contact: {
@@ -714,7 +725,7 @@ describe("Object Schemas", () => {
         },
       };
 
-      expect(schema.parse(validData)).toEqual(validData);
+      expect(schema.parse(inputData)).toEqual(inputData);
 
       expect(() =>
         schema.parse({
@@ -748,6 +759,23 @@ describe("Object Schemas", () => {
         email: M.string().nullable(),
         active: M.boolean().default(true),
       });
+
+      type TSchemaType = InferSchemaType<typeof schema>;
+      expectTypeOf<TSchemaType>().toEqualTypeOf<{
+        _id: ObjectId;
+        name: string;
+        age?: number | undefined;
+        email: string | null;
+        active: boolean;
+      }>();
+
+      type TInputType = InferSchemaInputType<typeof schema>;
+      expectTypeOf<TInputType>().toEqualTypeOf<{
+        name: string;
+        age?: number | undefined;
+        email: string | null;
+        active?: boolean | undefined;
+      }>();
 
       expect(
         schema.parse({
@@ -801,7 +829,7 @@ describe("Deeply Nested Structures", () => {
         id: M.string(),
         data: M.union(
           M.object({
-            type: M.string().enum(["text"]),
+            type: M.string().enum(["text"] as const),
             content: M.string(),
             metadata: M.object({
               length: M.number(),
@@ -809,9 +837,9 @@ describe("Deeply Nested Structures", () => {
             }).optional(),
           }),
           M.object({
-            type: M.string().enum(["image"]),
+            type: M.string().enum(["image"] as const),
             url: M.string(),
-            dimensions: M.tuple(M.number(), M.number()),
+            dimensions: M.tuple([M.number(), M.string()]),
           }),
         ),
         tags: M.array(M.string()).optional(),
@@ -819,7 +847,23 @@ describe("Deeply Nested Structures", () => {
       }),
     );
 
-    const validData = [
+    type TInput = InferSchemaInputType<typeof schema>;
+    expectTypeOf<TInput>().toEqualTypeOf<
+      {
+        id: string;
+        data:
+          | {
+              type: "text";
+              content: string;
+              metadata?: { length: number; words: string[] } | undefined;
+            }
+          | { type: "image"; url: string; dimensions: readonly [number, string] };
+        tags?: string[] | undefined;
+        active?: boolean | undefined;
+      }[]
+    >();
+
+    const validData: TInput = [
       {
         id: "1",
         data: {
@@ -838,7 +882,7 @@ describe("Deeply Nested Structures", () => {
         data: {
           type: "image",
           url: "https://example.com/image.jpg",
-          dimensions: [800, 600],
+          dimensions: [800, "600"],
         },
         tags: undefined,
         active: false,
@@ -853,26 +897,22 @@ describe("Deeply Nested Structures", () => {
   });
 
   test("should handle nested tuples with complex schemas", () => {
-    const schema = M.tuple(
+    const schema = M.tuple([
       M.string(),
       M.array(
-        M.tuple(
+        M.tuple([
           M.number(),
           M.object({
             nested: M.union(M.array(M.string()), M.object({ count: M.number() })),
           }),
-        ),
+        ]),
       ),
       M.object({
-        complex: M.array(M.union(M.string(), M.tuple(M.number(), M.boolean()))).optional(),
+        complex: M.array(M.union(M.string(), M.tuple([M.number(), M.boolean()]))).optional(),
       }),
-    );
+    ]);
 
-    const validData: [
-      string,
-      [number, { nested: string[] | { count: number } }][],
-      { complex?: (string | [number, boolean])[] },
-    ] = [
+    const validData: InferSchemaInputType<typeof schema> = [
       "header",
       [
         [1, { nested: ["a", "b", "c"] }],
@@ -898,7 +938,7 @@ describe("Deeply Nested Structures", () => {
                     M.string(),
                     M.array(M.number()),
                     M.object({
-                      nested: M.tuple(M.boolean(), M.string().optional()),
+                      nested: M.tuple([M.boolean(), M.string().optional()]),
                     }),
                   ),
                 }),
@@ -909,7 +949,7 @@ describe("Deeply Nested Structures", () => {
       }),
     });
 
-    const validData = {
+    const validData: InferSchemaInputType<typeof schema> = {
       level1: {
         level2: {
           level3: {
@@ -917,8 +957,8 @@ describe("Deeply Nested Structures", () => {
               level5: [
                 { data: "simple string" },
                 { data: [1, 2, 3, 4, 5] },
-                { data: { nested: [true, "optional"] as [boolean, string] } },
-                { data: { nested: [false, undefined] as [boolean, undefined] } },
+                { data: { nested: [true, "optional"] } },
+                { data: { nested: [false, undefined] } },
               ],
             },
           },
@@ -943,7 +983,7 @@ describe("Deeply Nested Structures", () => {
               languages: M.array(M.string()).min(1),
             }),
           }),
-          metadata: M.tuple(M.date(), M.objectId(), M.array(M.string()).optional()),
+          metadata: M.tuple([M.date(), M.objectId(), M.array(M.string()).optional()]),
         }),
         M.object({
           type: M.string().enum(["system"]),
@@ -1141,7 +1181,7 @@ describe("MongsterSchema Root Schema", () => {
             metadata: {
               views: undefined,
               likes: undefined,
-              created: new Date("2023-01-01"),
+              created: new Date("2025-01-01"),
             },
           },
         ],
@@ -1167,7 +1207,7 @@ describe("MongsterSchema Root Schema", () => {
           name: "Alice",
           email: "alice@example.com",
         }),
-      ).toThrow("age: Expected a number, but received undefined. Field is required.");
+      ).toThrow("age: Expected a number, received undefined");
 
       expect(() =>
         schema.parse({
@@ -1197,7 +1237,7 @@ describe("MongsterSchema Root Schema", () => {
         decimal_field: M.decimal(),
         binary_field: M.binary(),
         array_field: M.array(M.string()),
-        tuple_field: M.tuple(M.string(), M.number()),
+        tuple_field: M.tuple([M.string(), M.number()]),
         union_field: M.union(M.string(), M.number()),
         object_field: M.object({
           nested: M.string(),

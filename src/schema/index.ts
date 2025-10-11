@@ -20,20 +20,20 @@ export class MongsterSchemaBuilder {
    * Fixed-position array (tuple).
    * @params items
    */
-  tuple<T extends MongsterSchemaBase<any>[]>(...items: T) {
+  tuple<T extends MongsterSchemaBase<any>[]>(items: [...T]) {
     return new TupleSchema(items);
   }
   /**
-   * Same thing as a `.tuple()` -> But takes the items as a single array
+   * Same thing as a `.tuple()` -> But takes the items as a args
    */
-  fixedArrayOf<T extends MongsterSchemaBase<any>[]>(items: [...T]) {
+  fixedArrayOf<T extends MongsterSchemaBase<any>[]>(...items: T) {
     return new TupleSchema(items);
   }
   /**
    * An embedded document's schema representation
    * @param shape
    */
-  object<T extends Record<string, MongsterSchemaBase<any>>>(shape: T) {
+  object<T extends Record<PropertyKey, MongsterSchemaBase<any>>>(shape: T) {
     return new ObjectSchema(shape);
   }
   /**
@@ -41,7 +41,7 @@ export class MongsterSchemaBuilder {
    * @param item
    */
   array<T extends MongsterSchemaBase<any>>(item: T) {
-    return new ArraySchema<T["$type"]>(item);
+    return new ArraySchema<T["$type"], T["$input"]>(item);
   }
   /**
    * Use whatever mixture of types/shapes you want. Mongo does not care, why should we ?
