@@ -16,6 +16,8 @@ export namespace M {
 
 export const mongster = new MongsterClient();
 
+export { MongsterClient };
+
 export function model<CN extends string, SC extends MongsterSchema<any, any>>(
   name: CN,
   schema: SC,

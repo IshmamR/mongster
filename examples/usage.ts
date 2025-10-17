@@ -1,4 +1,4 @@
-import { defineSchema, M, Mongster, model, mongster } from "../src/index";
+import { defineSchema, M, MongsterClient, model, mongster } from "../src/index";
 import type { PropertyType } from "../src/types/types.filter";
 import type { AllFilterKeys, AllProjKeys } from "../src/types/types.query";
 import type { InferSchemaInputType, InferSchemaType } from "../src/types/types.schema";
@@ -57,10 +57,10 @@ type Test = PropertyType<TUser, "nested.l3.m1">;
 //   ^?
 
 // 4. mongster.collection(name, schema)
-mongster.collection("accounts", userSchema);
+mongster.model("accounts", userSchema);
 
 // 5. separate instance if desired
-const custom = new Mongster();
-custom.collection("customs", userSchema);
+const custom = new MongsterClient();
+custom.model("customs", userSchema);
 
 console.log("OK", s.constructor.name, userSchema.collectIndexes().length);
