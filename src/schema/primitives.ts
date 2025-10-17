@@ -288,12 +288,12 @@ export class DateSchema extends MongsterSchemaBase<Date, Date> {
    */
   ttl(s: number): DateSchema {
     const clone = this.clone();
-    const currMeta = this.getMeta();
+    const currMeta = this.getIdxMeta();
     const newMeta: SchemaMeta<Date> = {
       options: { ...currMeta.options, expireAfterSeconds: s },
       index: currMeta.index ?? 1,
     };
-    clone.setMeta(newMeta);
+    clone.setIdxMeta(newMeta);
     return clone;
   }
 

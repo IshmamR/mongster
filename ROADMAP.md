@@ -39,11 +39,10 @@
 
 ### Core Features Pipeline
 - [ ] **Hook system** (pre/post save, validate, remove, find)
-- [ ] **Type-safe aggregation builders** with pipeline inference
 - [ ] **Transaction support** with easy DX and automatic session management
 - [ ] **Native schema validation** (opt-in MongoDB validation integration)
 - [ ] **Query caching** (opt-in with configurable strategies)  
-- [ ] **Intelligent index management** (creation/deletion based on queries)
+- [x] **Intelligent index management** (creation/deletion based on queries)
 
 ## 📋 Short-term (v0.2.0)
 
@@ -55,6 +54,7 @@
 - [ ] **Async hook support** with Promise-based execution
 
 ### Type-Safe Aggregation
+- [ ] **Type-safe aggregation builders** with pipeline inference
 - [ ] **Pipeline builder** with fluent API (`$match`, `$group`, `$sort`, etc.)
 - [ ] **Type inference** through pipeline stages
 - [ ] **Aggregation result typing** with proper return types

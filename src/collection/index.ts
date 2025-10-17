@@ -14,6 +14,7 @@ import type {
   FindOneOptions,
   FindOptions,
   Flatten,
+  IndexDescription,
   InsertManyResult,
   InsertOneOptions,
   InsertOneResult,
@@ -27,14 +28,44 @@ import type {
   WithId,
   WithoutId,
 } from "mongodb";
-import type { Mongster } from "../client";
+import type { MongsterClient } from "../client";
 import { Query } from "../queries/find/Query";
-import type { MongsterSchema } from "../schema/base";
+import type { MongsterSchema } from "../schema/schema";
 import type { MongsterFilter, MongsterUpdateFilter } from "../types/types.filter";
 import type { AllFilterKeys } from "../types/types.query";
 import type { InferSchemaInputType, InferSchemaType } from "../types/types.schema";
 
-export class MongsterCollection<
+function hashIndex(idx: any) {
+  return JSON.stringify({
+    key: idx.key,
+    unique: idx.unique,
+    sparse: idx.sparse,
+    partialFilterExpression: idx.partialFilterExpression,
+    expireAfterSeconds: idx.expireAfterSeconds,
+  });
+}
+
+function normalizeIndex(idx: any): IndexDescription {
+  const normalized: IndexDescription = { key: idx.key };
+
+  // Add optional properties if they exist
+  if (idx.unique !== undefined) normalized.unique = idx.unique;
+  if (idx.sparse !== undefined) normalized.sparse = idx.sparse;
+  if (idx.background !== undefined) normalized.background = idx.background;
+  if (idx.partialFilterExpression !== undefined) {
+    normalized.partialFilterExpression = idx.partialFilterExpression;
+  }
+  if (idx.expireAfterSeconds !== undefined) {
+    normalized.expireAfterSeconds = idx.expireAfterSeconds;
+  }
+  if (idx.weights !== undefined) normalized.weights = idx.weights;
+  if (idx.default_language !== undefined) normalized.default_language = idx.default_language;
+  if (idx.language_override !== undefined) normalized.language_override = idx.language_override;
+
+  return normalized;
+}
+
+export class MongsterModel<
   CN extends string,
   SC extends MongsterSchema<any>,
   T extends Document = InferSchemaInputType<SC>,
@@ -45,11 +76,13 @@ export class MongsterCollection<
 
   #schema: SC;
   #collectionOpts: CollectionOptions = {};
-  #connection: Mongster;
+  #connection: MongsterClient;
   #collection?: Collection<OT>;
   #collectionName: CN;
 
-  constructor(connection: Mongster, collectionName: CN, schema: SC) {
+  #indexSynced = false;
+
+  constructor(connection: MongsterClient, collectionName: CN, schema: SC) {
     this.#collectionName = collectionName;
     this.#schema = schema;
     this.#connection = connection;
@@ -67,6 +100,91 @@ export class MongsterCollection<
     return this.#collectionName;
   }
 
+  async syncIndexes(force = false): Promise<{
+    created: number;
+    dropped: number;
+    unchanged: number;
+  }> {
+    if (!this.#connection.getOptions().autoIndex || (this.#indexSynced && !force)) {
+      return { created: 0, dropped: 0, unchanged: 0 };
+    }
+
+    const collection = this.getCollection();
+
+    // get indexes from schema
+    const schemaIndexes = this.#schema.collectIndexes();
+
+    try {
+      // indexes in db
+      const dbIndexes = await collection.listIndexes().toArray();
+
+      const dbUserIndexes = dbIndexes.filter((idx) => idx.name !== "_id_");
+
+      const schemaIndexMap = new Map<string, IndexDescription>();
+      for (const idx of schemaIndexes) {
+        const normalized = normalizeIndex(idx);
+        const hash = hashIndex(normalized);
+        schemaIndexMap.set(hash, idx);
+      }
+      const dbIndexMap = new Map<string, any>();
+      for (const idx of dbUserIndexes) {
+        const normalized = normalizeIndex(idx);
+        const hash = hashIndex(normalized);
+        dbIndexMap.set(hash, idx);
+      }
+
+      // figure out what needs to change
+      const indexesToCreate: IndexDescription[] = [];
+      const idxNamesToDrop: string[] = [];
+      let unchangedCount = 0;
+
+      for (const [hash, schemaIdx] of schemaIndexMap) {
+        if (!dbIndexMap.has(hash)) {
+          indexesToCreate.push(schemaIdx);
+        } else {
+          unchangedCount++;
+        }
+      }
+
+      for (const [hash, dbIdx] of dbIndexMap) {
+        if (!schemaIndexMap.has(hash)) {
+          idxNamesToDrop.push(dbIdx.name);
+        }
+      }
+
+      for (const idxName of idxNamesToDrop) {
+        await collection.dropIndex(idxName);
+      }
+
+      if (indexesToCreate.length) {
+        await collection.createIndexes(indexesToCreate);
+      }
+
+      this.#indexSynced = true;
+
+      return {
+        created: indexesToCreate.length,
+        dropped: idxNamesToDrop.length,
+        unchanged: unchangedCount,
+      };
+    } catch (err: any) {
+      if (err.code === 26) {
+        // collection doesn't exist yet
+
+        if (!schemaIndexes.length) return { created: 0, dropped: 0, unchanged: 0 };
+
+        // create the collection and put the indexes
+
+        await this.#connection.getDb().createCollection(this.#collectionName);
+        await collection.createIndexes(schemaIndexes);
+
+        this.#indexSynced = true;
+        return { created: schemaIndexes.length, dropped: 0, unchanged: 0 };
+      }
+      throw err;
+    }
+  }
+
   /**
    * Insert a document to the collection.
    */
@@ -74,11 +192,14 @@ export class MongsterCollection<
     input: OptionalUnlessRequiredId<OT>,
     options?: InsertOneOptions,
   ): Promise<InsertOneResult<OT>> {
+    await this.syncIndexes();
+
     const collection = this.getCollection();
 
     const parsedInput = this.#schema.parse(input) as typeof input;
 
     const result = await collection.insertOne(parsedInput, options);
+
     return result;
   }
 
@@ -86,6 +207,8 @@ export class MongsterCollection<
     inputArr: OptionalUnlessRequiredId<OT>[],
     options?: BulkWriteOptions,
   ): Promise<InsertManyResult<OT>> {
+    await this.syncIndexes();
+
     const collection = this.getCollection();
 
     const parsedInputArr: OptionalUnlessRequiredId<OT>[] = [];
@@ -102,6 +225,8 @@ export class MongsterCollection<
    * Insert a document to the collection. Returns the created document.
    */
   async create(input: OptionalUnlessRequiredId<T>, options?: InsertOneOptions): Promise<OT | null> {
+    await this.syncIndexes();
+
     const collection = this.getCollection();
 
     const parsedInput = this.#schema.parse(input) as OptionalUnlessRequiredId<OT>;
@@ -112,9 +237,11 @@ export class MongsterCollection<
   }
 
   async createMany(
-    inputArr: OptionalUnlessRequiredId<OT>[],
+    inputArr: OptionalUnlessRequiredId<T>[],
     options?: BulkWriteOptions,
   ): Promise<OT[]> {
+    await this.syncIndexes();
+
     const collection = this.getCollection();
 
     const parsedInputArr: OptionalUnlessRequiredId<OT>[] = [];
@@ -183,6 +310,8 @@ export class MongsterCollection<
     updateData: MongsterUpdateFilter<OT>,
     options?: UpdateOptions & { sort?: Sort },
   ): Promise<UpdateResult<OT>> {
+    if (options?.upsert) await this.syncIndexes();
+
     const collection = this.getCollection();
 
     const result = await collection.updateOne(
@@ -198,6 +327,8 @@ export class MongsterCollection<
     updateData: MongsterUpdateFilter<OT>,
     options?: UpdateOptions & { sort?: Sort },
   ): Promise<UpdateResult<OT>> {
+    if (options?.upsert) await this.syncIndexes();
+
     const collection = this.getCollection();
 
     const result = await collection.updateMany(
@@ -213,6 +344,8 @@ export class MongsterCollection<
     replacement: WithoutId<OT>,
     options?: ReplaceOptions,
   ): Promise<UpdateResult<OT>> {
+    if (options?.upsert) await this.syncIndexes();
+
     const collection = this.getCollection();
 
     const result = await collection.replaceOne(filter as Filter<OT>, replacement, options);
@@ -251,5 +384,3 @@ export class MongsterCollection<
     return result.toArray() as unknown as ReturnType;
   }
 }
-
-export { MongsterCollection as MongsterModel };

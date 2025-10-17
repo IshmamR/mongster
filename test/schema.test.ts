@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
-import { Binary, Decimal128, ObjectId } from "bson";
+import { Binary, Decimal128, ObjectId } from "mongodb";
 import { MError } from "../src/error";
 import { MongsterSchemaBuilder } from "../src/schema";
 import type { InferSchemaInputType, InferSchemaType } from "../src/types/types.schema";

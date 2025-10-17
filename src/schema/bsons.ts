@@ -1,4 +1,4 @@
-import { Binary, Decimal128, ObjectId } from "bson";
+import { Binary, Decimal128, ObjectId } from "mongodb";
 import { MError } from "../error";
 import { MongsterSchemaBase, WithDefaultSchema } from "./base";
 

@@ -1,39 +1,37 @@
 import { type Db, MongoClient, type MongoClientOptions } from "mongodb";
-import { MongsterCollection } from "./collection";
-import type { MongsterSchema } from "./schema/base";
+import { MongsterModel } from "./collection";
+import type { MongsterSchema } from "./schema/schema";
 
 interface MongsterClientOptions extends MongoClientOptions {
   retryConnection?: number;
   retryDelayMs?: number;
+  autoIndex?: { syncOnConnect?: boolean } | boolean;
 }
 
 export class MongsterClient {
   #uri: string | undefined;
-  #options: MongsterClientOptions = {};
+  #options: MongsterClientOptions = { autoIndex: true };
   #client: MongoClient | undefined;
   #dbName: string | undefined;
   #connected = false;
 
-  private collectionSchemas = new Map<string, MongsterSchema<any>>();
+  #schemas = new Map<string, MongsterSchema<any>>();
+  #models = new Map<string, MongsterModel<any, any, any, any>>();
 
   constructor(uri?: string, options?: MongsterClientOptions) {
     this.#uri = uri;
-    this.#options = options ?? {};
+    this.#options = { ...this.#options, ...options };
   }
 
-  collection<CN extends string, SC extends MongsterSchema<any, any>>(
-    collectionName: CN,
-    schema: SC,
-  ) {
-    this.collectionSchemas.set(collectionName, schema);
-    return new MongsterCollection(this, collectionName, schema);
+  getOptions() {
+    return this.#options;
   }
 
-  /**
-   * Alias to `.collection()`
-   */
   model<CN extends string, SC extends MongsterSchema<any, any>>(collectionName: CN, schema: SC) {
-    return this.collection(collectionName, schema);
+    this.#schemas.set(collectionName, schema);
+    const model = new MongsterModel(this, collectionName, schema);
+    this.#models.set(collectionName, model);
+    return model;
   }
 
   async connect(uri?: string, options?: MongsterClientOptions): Promise<void> {
@@ -41,7 +39,12 @@ export class MongsterClient {
     if (!this.#uri) throw new Error("No database URI was provided");
 
     this.#options = { ...this.#options, ...options };
-    const { retryConnection = 1, retryDelayMs = 200, ...mongoClientOptions } = this.#options;
+    const {
+      retryConnection = 1,
+      retryDelayMs = 200,
+      autoIndex,
+      ...mongoClientOptions
+    } = this.#options;
 
     let retryAttempt = 0;
     let lastErr: unknown;
@@ -56,6 +59,14 @@ export class MongsterClient {
         this.#client = client;
         this.#dbName = client.options.dbName;
         this.#connected = true;
+
+        if (autoIndex && typeof autoIndex !== "boolean" && autoIndex?.syncOnConnect) {
+          const promises = this.#models
+            .values()
+            .map((model) => model.syncIndexes().catch(() => {}));
+          await Promise.all(promises);
+        }
+
         return;
       } catch (err) {
         this.#connected = false;

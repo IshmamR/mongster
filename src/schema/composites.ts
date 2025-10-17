@@ -24,6 +24,10 @@ export class ObjectSchema<
     this.#checks = checks;
   }
 
+  getShape(): T {
+    return this.#shape;
+  }
+
   default(o: $T): WithDefaultSchema<$T> {
     const objSchema = new ObjectSchema(this.#shape, { ...this.#checks, default: o });
     return new WithDefaultSchema(objSchema);
@@ -82,6 +86,10 @@ export class UnionSchema<
     super();
     this.#shapes = shapes;
     this.#checks = checks;
+  }
+
+  getShapes(): T {
+    return this.#shapes;
   }
 
   default(d: $T): WithDefaultSchema<$T> {
@@ -143,6 +151,10 @@ export class TupleSchema<
     super();
     this.#shapes = shapes;
     this.#checks = checks;
+  }
+
+  getShapes(): T {
+    return this.#shapes;
   }
 
   default(d: $T): WithDefaultSchema<$T> {

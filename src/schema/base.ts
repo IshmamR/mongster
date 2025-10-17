@@ -1,39 +1,28 @@
-import type { Filter, IndexSpecification } from "mongodb";
+import type { Filter } from "mongodb";
 import { MError } from "../error";
-import type { AllFilterKeys } from "../types/types.query";
-import type {
-  IndexDirection,
-  IndexOptions,
-  MongsterSchemaOptions,
-  ObjectInput,
-  ObjectOutput,
-  Resolve,
-  SchemaMeta,
-  ValidatorFunc,
-  WithTimestamps,
-} from "../types/types.schema";
+import type { MongsterIndexDirection, SchemaMeta, ValidatorFunc } from "../types/types.schema";
 
 export abstract class MongsterSchemaBase<T, I = T & any> {
   declare $type: T;
   declare $input: I;
 
-  #meta: SchemaMeta<T> = { options: {} };
+  #idxMeta: SchemaMeta<T> = { options: {} };
 
   abstract clone(): this;
   abstract parse(v: unknown): T;
 
-  getMeta(): SchemaMeta<T> {
-    return this.#meta;
+  getIdxMeta(): SchemaMeta<T> {
+    return this.#idxMeta;
   }
-  setMeta(meta: SchemaMeta<T>): void {
-    this.#meta = meta;
+  setIdxMeta(meta: SchemaMeta<T>): void {
+    this.#idxMeta = meta;
   }
 
-  index(direction: IndexDirection = 1): this {
+  index(direction: MongsterIndexDirection = 1): this {
     const clone = this.clone();
-    clone.#meta = {
-      ...this.#meta,
-      options: { ...this.#meta.options },
+    clone.#idxMeta = {
+      ...this.#idxMeta,
+      options: { ...this.#idxMeta.options },
       index: direction,
     };
     return clone;
@@ -41,39 +30,39 @@ export abstract class MongsterSchemaBase<T, I = T & any> {
 
   uniqueIndex(): this {
     const clone = this.clone();
-    clone.#meta = {
-      ...this.#meta,
-      options: { ...this.#meta.options, unique: true },
-      index: this.#meta.index ?? 1,
+    clone.#idxMeta = {
+      ...this.#idxMeta,
+      options: { ...this.#idxMeta.options, unique: true },
+      index: this.#idxMeta.index ?? 1,
     };
     return clone;
   }
 
   sparseIndex(): this {
     const clone = this.clone();
-    clone.#meta = {
-      ...this.#meta,
-      options: { ...this.#meta.options, sparse: true },
-      index: this.#meta.index ?? 1,
+    clone.#idxMeta = {
+      ...this.#idxMeta,
+      options: { ...this.#idxMeta.options, sparse: true },
+      index: this.#idxMeta.index ?? 1,
     };
     return clone;
   }
 
   partialIndex(expr: Filter<T>): this {
     const clone = this.clone();
-    clone.#meta = {
-      ...this.#meta,
-      options: { ...this.#meta.options, partialFilterExpression: expr },
-      index: this.#meta.index ?? 1,
+    clone.#idxMeta = {
+      ...this.#idxMeta,
+      options: { ...this.#idxMeta.options, partialFilterExpression: expr },
+      index: this.#idxMeta.index ?? 1,
     };
     return clone;
   }
 
   hashedIndex(): this {
     const clone = this.clone();
-    clone.#meta = {
-      ...this.#meta,
-      options: { ...this.#meta.options },
+    clone.#idxMeta = {
+      ...this.#idxMeta,
+      options: { ...this.#idxMeta.options },
       index: "hashed",
     };
     return clone;
@@ -81,9 +70,9 @@ export abstract class MongsterSchemaBase<T, I = T & any> {
 
   textIndex(): this {
     const clone = this.clone();
-    clone.#meta = {
-      ...this.#meta,
-      options: { ...this.#meta.options },
+    clone.#idxMeta = {
+      ...this.#idxMeta,
+      options: { ...this.#idxMeta.options },
       index: "text",
     };
     return clone;
@@ -221,6 +210,10 @@ export class ArraySchema<T, I> extends MongsterSchemaBase<T[], I[]> {
     this.#checks = checks;
   }
 
+  getShapes(): MongsterSchemaBase<T, I> {
+    return this.#shapes;
+  }
+
   min(n: number): ArraySchema<T, I> {
     return new ArraySchema(this.#shapes, { ...this.#checks, min: n });
   }
@@ -268,129 +261,5 @@ export class ArraySchema<T, I> extends MongsterSchemaBase<T[], I[]> {
         });
       }
     });
-  }
-}
-
-/**
- * The schema that goes to collection
- */
-export class MongsterSchema<
-  T extends Record<string, MongsterSchemaBase<any>>,
-  $T = Resolve<ObjectOutput<T>>,
-  $I = Resolve<ObjectInput<T>>,
-> extends MongsterSchemaBase<$T> {
-  declare $type: $T;
-  declare $input: $I;
-  declare $brand: "MongsterSchema";
-
-  protected rootIndexes: IndexSpecification[] = [];
-  protected options: MongsterSchemaOptions = {};
-
-  #shape: T;
-
-  constructor(shape: T) {
-    super();
-    this.#shape = shape;
-  }
-
-  withTimestamps(): MongsterSchema<T, WithTimestamps<$T>> {
-    const clone = this.clone();
-    clone.options = { ...this.options, withTimestamps: true };
-    return clone as MongsterSchema<T, WithTimestamps<$T>>;
-  }
-
-  createIndex<K extends AllFilterKeys<$T>>(
-    keys: Record<K, IndexDirection>,
-    options?: IndexOptions<$T>,
-  ): this {
-    this.rootIndexes.push({ key: keys, ...(options as any) });
-    return this;
-  }
-
-  clone(): this {
-    return new MongsterSchema(this.#shape) as this;
-  }
-
-  parse(v: unknown): $T {
-    if (typeof v !== "object" || v === null) throw new MError("Expected an object");
-    if (Array.isArray(v)) throw new MError("Expected an object, but received an array");
-
-    const out: Record<string, unknown> = {};
-    for (const [k, s] of Object.entries(this.#shape)) {
-      try {
-        out[k] = (s as MongsterSchemaBase<any>).parse((v as any)[k]);
-      } catch (err) {
-        throw new MError(`${k}: ${(err as MError).message}`, {
-          cause: err,
-        });
-      }
-    }
-    return out as $T;
-  }
-
-  /**
-   * recursively gather all index specifications declared via:
-   *  - field-level schema meta (`index()`, `unique()`, `sparse()`, `text()`, `hashed()`, `ttl()`)
-   *  - root-level `createIndex()` calls on this (and nested `MongsterSchema` instances)
-   * nested keys use MongoDB dot notation (e.g. `address.zip`).
-   */
-  collectIndexes(): IndexSpecification[] {
-    const collected: IndexSpecification[] = [...this.rootIndexes];
-
-    function pushFieldIndex(path: string, schema: MongsterSchemaBase<any>) {
-      const meta = schema.getMeta();
-      if (meta && typeof meta.index !== "undefined") {
-        const opts =
-          meta.options && Object.keys(meta.options).length ? { ...meta.options } : undefined;
-        collected.push({
-          key: { [path]: meta.index },
-          ...(opts as any),
-        });
-      }
-    }
-
-    function unwrap(s: MongsterSchemaBase<any>): MongsterSchemaBase<any> {
-      let cur: any = s;
-      while (cur && cur.inner instanceof MongsterSchemaBase) cur = cur.inner;
-      return cur as MongsterSchemaBase<any>;
-    }
-
-    function walkShape(shape: Record<string, MongsterSchemaBase<any>>, parent: string) {
-      for (const [k, rawSchema] of Object.entries(shape)) {
-        const path = parent ? `${parent}.${k}` : k;
-        collect(rawSchema, path);
-      }
-    }
-
-    function collect(schema: MongsterSchemaBase<any>, path: string) {
-      pushFieldIndex(path, schema);
-      const unwrapped = unwrap(schema);
-      if (unwrapped !== schema) pushFieldIndex(path, unwrapped);
-
-      if (unwrapped instanceof MongsterSchema) {
-        for (const idxRaw of (unwrapped as any).rootIndexes as IndexSpecification[]) {
-          const idx: any = idxRaw as any;
-          if (idx && typeof idx === "object" && idx.key && typeof idx.key === "object") {
-            const newKey: any = {};
-            for (const [k, v] of Object.entries(idx.key as Record<string, any>)) {
-              newKey[`${path}.${k}`] = v;
-            }
-            const cloned: any = { ...idx };
-            cloned.key = newKey;
-            collected.push(cloned);
-          }
-        }
-        walkShape((unwrapped as any).shape, path);
-      } else if ((unwrapped as any).shape && typeof (unwrapped as any).shape === "object") {
-        walkShape((unwrapped as any).shape, path);
-      } else if (unwrapped instanceof ArraySchema) {
-        const inner = (unwrapped as any).shapes as MongsterSchemaBase<any>;
-        if (inner) collect(inner, path);
-      }
-    }
-
-    walkShape(this.#shape, "");
-
-    return collected;
   }
 }

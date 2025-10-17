@@ -1,7 +1,8 @@
-import { ArraySchema, MongsterSchema, type MongsterSchemaBase } from "./base";
+import { ArraySchema, type MongsterSchemaBase } from "./base";
 import { BinarySchema, Decimal128Schema, ObjectIdSchema } from "./bsons";
 import { ObjectSchema, TupleSchema, UnionSchema } from "./composites";
 import { BooleanSchema, DateSchema, NumberSchema, StringSchema } from "./primitives";
+import { MongsterSchema } from "./schema";
 
 export class MongsterSchemaBuilder {
   number() {

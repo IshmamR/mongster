@@ -1,6 +1,7 @@
 import { MongsterClient } from "./client";
 import { MongsterSchemaBuilder } from "./schema";
-import type { MongsterSchema, MongsterSchemaBase } from "./schema/base";
+import type { MongsterSchemaBase } from "./schema/base";
+import type { MongsterSchema } from "./schema/schema";
 import type { InferSchemaInputType, InferSchemaType } from "./types/types.schema";
 
 export { MError } from "./error";
