@@ -13,7 +13,8 @@
 	},
 	"formatter": {
 		"enabled": true,
-		"indentStyle": "space"
+		"indentStyle": "space",
+		"lineWidth": 100
 	},
 	"linter": {
 		"enabled": true,

@@ -1,6 +1,6 @@
 import { MError } from "../error";
 import type { SchemaMeta } from "../types/types.schema";
-import { MongsterSchemaBase, WithDefaultSchema } from "./base";
+import { MongsterSchemaInternal, WithDefaultSchema } from "./base";
 
 interface NumberChecks<N> {
   min?: number;
@@ -10,7 +10,7 @@ interface NumberChecks<N> {
   defaultFn?: () => N;
 }
 
-export class NumberSchema<TP extends number = number> extends MongsterSchemaBase<TP, TP> {
+export class NumberSchema<TP extends number = number> extends MongsterSchemaInternal<TP, TP> {
   declare $type: TP;
   declare $input: TP;
 
@@ -19,6 +19,10 @@ export class NumberSchema<TP extends number = number> extends MongsterSchemaBase
   constructor(checks: NumberChecks<TP> = {}) {
     super();
     this.#checks = checks;
+  }
+
+  getChecks(): NumberChecks<TP> {
+    return this.#checks;
   }
 
   min(n: number): NumberSchema<TP> {
@@ -87,7 +91,7 @@ interface StringChecks<S> {
   defaultFn?: () => S;
 }
 
-export class StringSchema<TP extends string = string> extends MongsterSchemaBase<TP, TP> {
+export class StringSchema<TP extends string = string> extends MongsterSchemaInternal<TP, TP> {
   declare $type: TP;
   declare $input: TP;
 
@@ -96,6 +100,10 @@ export class StringSchema<TP extends string = string> extends MongsterSchemaBase
   constructor(checks: StringChecks<TP> = {}) {
     super();
     this.#checks = checks;
+  }
+
+  getChecks(): StringChecks<TP> {
+    return this.#checks;
   }
 
   min(n: number): StringSchema<TP> {
@@ -169,7 +177,7 @@ interface BooleanChecks {
   defaultFn?: () => boolean;
 }
 
-export class BooleanSchema extends MongsterSchemaBase<boolean, boolean> {
+export class BooleanSchema extends MongsterSchemaInternal<boolean, boolean> {
   declare $type: boolean;
   declare $input: boolean;
 
@@ -178,6 +186,10 @@ export class BooleanSchema extends MongsterSchemaBase<boolean, boolean> {
   constructor(checks: BooleanChecks = {}) {
     super();
     this.#checks = checks;
+  }
+
+  getChecks(): BooleanChecks {
+    return this.#checks;
   }
 
   default(d: boolean): WithDefaultSchema<boolean> {
@@ -218,7 +230,7 @@ interface DateChecks {
   defaultFn?: () => Date;
 }
 
-export class DateSchema extends MongsterSchemaBase<Date, Date> {
+export class DateSchema extends MongsterSchemaInternal<Date, Date> {
   declare $type: Date;
   declare $input: Date;
 
@@ -227,6 +239,10 @@ export class DateSchema extends MongsterSchemaBase<Date, Date> {
   constructor(checks: DateChecks = {}) {
     super();
     this.#checks = checks;
+  }
+
+  getChecks(): DateChecks {
+    return this.#checks;
   }
 
   min(d: Date): DateSchema {

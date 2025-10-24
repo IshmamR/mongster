@@ -1,13 +1,13 @@
 import { Binary, Decimal128, ObjectId } from "mongodb";
 import { MError } from "../error";
-import { MongsterSchemaBase, WithDefaultSchema } from "./base";
+import { MongsterSchemaInternal, WithDefaultSchema } from "./base";
 
 interface ObjectIdChecks {
   default?: "generate" | ObjectId;
   defaultFn?: () => ObjectId;
 }
 
-export class ObjectIdSchema extends MongsterSchemaBase<ObjectId, ObjectId> {
+export class ObjectIdSchema extends MongsterSchemaInternal<ObjectId, ObjectId> {
   declare $type: ObjectId;
   declare $input: ObjectId;
 
@@ -16,6 +16,10 @@ export class ObjectIdSchema extends MongsterSchemaBase<ObjectId, ObjectId> {
   constructor(checks: ObjectIdChecks = {}) {
     super();
     this.#checks = checks;
+  }
+
+  getChecks(): ObjectIdChecks {
+    return this.#checks;
   }
 
   default(d: "generate" | ObjectId): WithDefaultSchema<ObjectId> {
@@ -51,7 +55,7 @@ interface Decimal128Checks {
   defaultFn?: () => Decimal128;
 }
 
-export class Decimal128Schema extends MongsterSchemaBase<Decimal128, Decimal128> {
+export class Decimal128Schema extends MongsterSchemaInternal<Decimal128, Decimal128> {
   declare $type: Decimal128;
   declare $input: Decimal128;
 
@@ -60,6 +64,10 @@ export class Decimal128Schema extends MongsterSchemaBase<Decimal128, Decimal128>
   constructor(checks: Decimal128Checks = {}) {
     super();
     this.#checks = checks;
+  }
+
+  getChecks(): Decimal128Checks {
+    return this.#checks;
   }
 
   default(d: Decimal128): WithDefaultSchema<Decimal128> {
@@ -114,7 +122,7 @@ interface BinaryChecks {
   defaultFn?: () => Binary;
 }
 
-export class BinarySchema extends MongsterSchemaBase<Binary, Binary> {
+export class BinarySchema extends MongsterSchemaInternal<Binary, Binary> {
   declare $type: Binary;
   declare $input: Binary;
 
@@ -123,6 +131,10 @@ export class BinarySchema extends MongsterSchemaBase<Binary, Binary> {
   constructor(checks: BinaryChecks = { subType: Binary.SUBTYPE_DEFAULT }) {
     super();
     this.#checks = checks;
+  }
+
+  getChecks(): BinaryChecks {
+    return this.#checks;
   }
 
   min(n: number): BinarySchema {
@@ -187,5 +199,92 @@ export class BinarySchema extends MongsterSchemaBase<Binary, Binary> {
     }
 
     return new Binary(buf, this.#checks.subType);
+  }
+
+  getJsonSchema(): any {
+    const hasMin = typeof this.#checks.min === "number";
+    const hasMax = typeof this.#checks.max === "number";
+
+    const base64Regex = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+    const property: any = {
+      type: "object",
+      properties: {
+        bytes: { type: "string", pattern: base64Regex.source },
+        subtype: { type: "integer", const: this.#checks.subType },
+      },
+      required: ["bytes", "subtype"],
+      additionalProperties: false,
+    };
+
+    if (typeof this.#checks.default !== "undefined") {
+      property.properties.bytes.default = this.#checks.default.toString("base64");
+    }
+
+    if (!hasMin && !hasMax) return property;
+
+    const ceilDiv = (n: number, d: number) => Math.floor((n + d - 1) / d);
+    const floorDiv = (n: number, d: number) => Math.floor(n / d);
+
+    const min = hasMin ? (this.#checks.min as number) : 0;
+    const max = hasMax ? (this.#checks.max as number) : Number.MAX_SAFE_INTEGER;
+
+    if (min === 0 && max === 0) {
+      property.properties.bytes.pattern = "^$";
+      return property;
+    }
+
+    const branches: { type: string; pattern: string }[] = [];
+
+    // r = 0 (no padding)
+    {
+      const kMin = ceilDiv(min, 3);
+      const kMax = floorDiv(max, 3);
+      if (kMin <= kMax) {
+        branches.push({
+          type: "string",
+          pattern: `^(?:[A-Za-z0-9+/]{4}){${kMin},${kMax}}$`,
+        });
+      }
+    }
+
+    // r = 1 (==)
+    {
+      let kMin = ceilDiv(min - 1, 3);
+      const kMax = floorDiv(max - 1, 3);
+      if (kMin < 0) kMin = 0;
+      if (kMax >= 0 && kMin <= kMax) {
+        branches.push({
+          type: "string",
+          pattern: `^(?:[A-Za-z0-9+/]{4}){${kMin},${kMax}}[A-Za-z0-9+/]{2}==$`,
+        });
+      }
+    }
+
+    // r = 2 (=)
+    {
+      let kMin = ceilDiv(min - 2, 3);
+      const kMax = floorDiv(max - 2, 3);
+      if (kMin < 0) kMin = 0;
+      if (kMax >= 0 && kMin <= kMax) {
+        branches.push({
+          type: "string",
+          pattern: `^(?:[A-Za-z0-9+/]{4}){${kMin},${kMax}}[A-Za-z0-9+/]{3}=$`,
+        });
+      }
+    }
+
+    if (min === 0 && max > 0) {
+      branches.unshift({ type: "string", pattern: "^$" });
+    }
+
+    if (!branches.length) {
+      property.properties.bytes = { not: {} } as any;
+    } else if (branches.length === 1 && !!branches[0]) {
+      property.properties.bytes = branches[0];
+    } else {
+      property.properties.bytes = { oneOf: branches } as any;
+    }
+
+    return property;
   }
 }

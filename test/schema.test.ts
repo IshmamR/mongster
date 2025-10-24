@@ -731,6 +731,12 @@ describe("Object Schemas", () => {
       expect(() => schema.parse([])).toThrow("Expected an object, but received an array");
     });
 
+    test("should reject embedded MongsterSchema", () => {
+      expect(() => M.object({ embedded: M.schema({ name: M.string() }) as any })).toThrowError(
+        "MongsterSchema cannot be embedded",
+      );
+    });
+
     test("should validate all properties", () => {
       const schema = M.object({
         name: M.string(),
@@ -1190,6 +1196,12 @@ describe("MongsterSchema Root Schema", () => {
       };
 
       expect(() => schema.parse(data)).not.toThrow();
+    });
+
+    test("should reject embedded MongsterSchema", () => {
+      expect(() => M.schema({ embedded: M.schema({ name: M.string() }) as any })).toThrowError(
+        "MongsterSchema cannot be embedded",
+      );
     });
 
     test("should handle complex nested schemas", () => {

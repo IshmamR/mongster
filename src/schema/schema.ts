@@ -10,14 +10,22 @@ import type {
   Resolve,
   WithTimestamps,
 } from "../types/types.schema";
-import { ArraySchema, MongsterSchemaBase } from "./base";
+import { ArraySchema, MongsterSchemaBase, MongsterSchemaInternal, OptionalSchema } from "./base";
+import { BinarySchema, Decimal128Schema, ObjectIdSchema } from "./bsons";
 import { ObjectSchema, TupleSchema, UnionSchema } from "./composites";
+import { BooleanSchema, DateSchema, NumberSchema, StringSchema } from "./primitives";
+
+function unwrapSchema(s: MongsterSchemaBase<any>): MongsterSchemaInternal<any> {
+  let cur: any = s;
+  while (cur && cur.inner instanceof MongsterSchemaInternal) cur = cur.inner;
+  return cur as MongsterSchemaInternal<any>;
+}
 
 /**
  * The schema that goes to collection
  */
 export class MongsterSchema<
-  T extends Record<string, MongsterSchemaBase<any>>,
+  T extends Record<string, MongsterSchemaInternal<any>>,
   $T = Resolve<ObjectOutput<T>>,
   $I = Resolve<ObjectInput<T>>,
 > extends MongsterSchemaBase<$T> {
@@ -32,6 +40,10 @@ export class MongsterSchema<
   #collectedIndexes: IndexDescription[] | null;
 
   constructor(shape: T) {
+    for (const [_, rawSchema] of Object.entries(shape)) {
+      if (rawSchema instanceof MongsterSchema) throw new Error("MongsterSchema cannot be embedded");
+    }
+
     super();
     this.#shape = shape;
     this.#collectedIndexes = null;
@@ -41,22 +53,26 @@ export class MongsterSchema<
     return this.#shape;
   }
 
+  addIndex<K extends AllFilterKeys<$T>>(
+    keys: Record<K, MongsterIndexDirection>,
+    options?: MongsterIndexOptions<$T>,
+  ): this {
+    const clone = this.clone();
+    clone.rootIndexes.push({ key: keys, ...options });
+    return clone;
+  }
+
   withTimestamps(): MongsterSchema<T, WithTimestamps<$T>> {
     const clone = this.clone();
     clone.options = { ...this.options, withTimestamps: true };
     return clone as MongsterSchema<T, WithTimestamps<$T>>;
   }
 
-  addIndex<K extends AllFilterKeys<$T>>(
-    keys: Record<K, MongsterIndexDirection>,
-    options?: MongsterIndexOptions<$T>,
-  ): this {
-    this.rootIndexes.push({ key: keys, ...(options as any) });
-    return this;
-  }
-
   clone(): this {
-    return new MongsterSchema(this.#shape) as this;
+    const clone = new MongsterSchema(this.#shape) as this;
+    clone.rootIndexes = [...this.rootIndexes];
+    clone.options = { ...this.options };
+    return clone;
   }
 
   parse(v: unknown): $T {
@@ -92,52 +108,28 @@ export class MongsterSchema<
 
     const collected = [...this.rootIndexes];
 
-    function pushFieldIndex(path: string, schema: MongsterSchemaBase<any>) {
+    function pushFieldIndex(path: string, schema: MongsterSchemaInternal<any>) {
       const meta = schema.getIdxMeta();
       if (meta && typeof meta.index !== "undefined") {
-        const opts =
-          meta.options && Object.keys(meta.options).length ? { ...meta.options } : undefined;
-
-        collected.push({
-          key: { [path]: meta.index },
-          ...(opts as any),
-        });
+        const opts = Object.keys(meta.options ?? {}).length ? { ...meta.options } : undefined;
+        collected.push({ key: { [path]: meta.index }, ...opts });
       }
     }
 
-    function unwrap(s: MongsterSchemaBase<any>): MongsterSchemaBase<any> {
-      let cur: any = s;
-      while (cur && cur.inner instanceof MongsterSchemaBase) cur = cur.inner;
-      return cur as MongsterSchemaBase<any>;
-    }
-
-    function walkShape(shape: Record<string, MongsterSchemaBase<any>>, parent: string) {
+    function walkShape(shape: Record<string, MongsterSchemaInternal<any>>, parent: string) {
       for (const [k, rawSchema] of Object.entries(shape)) {
         const path = parent ? `${parent}.${k}` : k;
         collect(rawSchema, path);
       }
     }
 
-    function collect(schema: MongsterSchemaBase<any>, path: string) {
+    const collect = (schema: MongsterSchemaInternal<any>, path: string) => {
       pushFieldIndex(path, schema);
-      const unwrapped = unwrap(schema);
+      const unwrapped = unwrapSchema(schema);
       if (unwrapped !== schema) pushFieldIndex(path, unwrapped);
 
-      if (unwrapped instanceof MongsterSchema) {
-        for (const idxRaw of unwrapped.rootIndexes) {
-          const idx: any = idxRaw as any;
-          if (idx && typeof idx === "object" && idx.key && typeof idx.key === "object") {
-            const newKey: any = {};
-            for (const [k, v] of Object.entries(idx.key as Record<string, any>)) {
-              newKey[`${path}.${k}`] = v;
-            }
-            const cloned: any = { ...idx };
-            cloned.key = newKey;
-            collected.push(cloned);
-          }
-        }
-        walkShape(unwrapped.getShape(), path);
-      } else if (unwrapped instanceof ObjectSchema) {
+      if (unwrapped instanceof ObjectSchema) {
+        collected.push(...unwrapped.getRootIndexes(path));
         walkShape(unwrapped.getShape(), path);
       } else if (unwrapped instanceof UnionSchema || unwrapped instanceof TupleSchema) {
         walkShape(unwrapped.getShapes(), path);
@@ -145,11 +137,127 @@ export class MongsterSchema<
         const inner = unwrapped.getShapes();
         if (inner) collect(inner, path);
       }
-    }
+    };
 
     walkShape(this.#shape, "");
 
     this.#collectedIndexes = collected;
     return collected;
+  }
+
+  getJsonSchema(): any {
+    function makeJsonSchema(schema: MongsterSchemaInternal<any>): any {
+      const unwrapped = unwrapSchema(schema);
+      if (unwrapped instanceof NumberSchema) {
+        const property: Record<string, any> = { type: "number" };
+        const checks = unwrapped.getChecks();
+        if (typeof checks.min !== "undefined") property.minimum = checks.min;
+        if (typeof checks.max !== "undefined") property.maximum = checks.max;
+        if (typeof checks.enum !== "undefined") property.enum = checks.enum;
+        if (typeof checks.default !== "undefined") property.default = checks.default;
+        return property;
+      }
+
+      if (unwrapped instanceof StringSchema) {
+        const property: Record<string, any> = { type: "string" };
+        const checks = unwrapped.getChecks();
+        if (typeof checks.min !== "undefined") property.minLength = checks.min;
+        if (typeof checks.max !== "undefined") property.maxLength = checks.max;
+        if (typeof checks.enum !== "undefined") property.enum = checks.enum;
+        if (typeof checks.match !== "undefined") property.pattern = checks.match.source;
+        if (typeof checks.default !== "undefined") property.default = checks.default;
+        return property;
+      }
+
+      if (unwrapped instanceof BooleanSchema) {
+        const property: Record<string, any> = { type: "boolean" };
+        const checks = unwrapped.getChecks();
+        if (typeof checks.default !== "undefined") property.default = checks.default;
+        return property;
+      }
+      if (unwrapped instanceof DateSchema) {
+        const property: Record<string, any> = { type: "string", format: "date-time" };
+        const checks = unwrapped.getChecks();
+        if (typeof checks.default !== "undefined") property.default = checks.default.toISOString();
+        return property;
+      }
+
+      if (unwrapped instanceof ObjectIdSchema) {
+        const objectIdRegex = /^[a-f0-9]{24}$/;
+        const property: Record<string, any> = { type: "string", pattern: objectIdRegex.source };
+        const checks = unwrapped.getChecks();
+        if (typeof checks.default !== "undefined") property.default = checks.default.toString();
+        return property;
+      }
+      if (unwrapped instanceof Decimal128Schema) {
+        const decimalRegex = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+        const property: Record<string, any> = { type: "string", pattern: decimalRegex.source };
+        const checks = unwrapped.getChecks();
+        if (typeof checks.default !== "undefined") property.default = checks.default.toString();
+        return property;
+      }
+      if (unwrapped instanceof BinarySchema) {
+        return unwrapped.getJsonSchema();
+      }
+
+      if (unwrapped instanceof ArraySchema) {
+        const inner = unwrapped.getShapes();
+        const property: Record<string, any> = { type: "array", items: makeJsonSchema(inner) };
+        const checks = unwrapped.getChecks();
+        if (typeof checks.min !== "undefined") property.minItems = checks.min;
+        if (typeof checks.max !== "undefined") property.maxItems = checks.max;
+        if (typeof checks.default !== "undefined") property.default = checks.default;
+        return property;
+      }
+
+      if (unwrapped instanceof ObjectSchema) {
+        const property = walk(unwrapped.getShape());
+        const checks = unwrapped.getChecks();
+        if (typeof checks.default !== "undefined") property.default = checks.default;
+        return property;
+      }
+
+      if (unwrapped instanceof TupleSchema) {
+        const property: Record<string, any> = { type: "array", items: [] };
+        const innerShapes = unwrapped.getShapes();
+        for (const innerShape of innerShapes) {
+          property.items.push(makeJsonSchema(innerShape));
+        }
+        property.minItems = innerShapes.length;
+        property.maxItems = innerShapes.length;
+        const checks = unwrapped.getChecks();
+        if (typeof checks.default !== "undefined") property.default = checks.default;
+        return property;
+      }
+
+      if (unwrapped instanceof UnionSchema) {
+        const property: Record<string, any> = { anyOf: [] };
+        const innerShapes = unwrapped.getShapes();
+        for (const innerShape of innerShapes) {
+          property.anyOf.push(makeJsonSchema(innerShape));
+        }
+        const checks = unwrapped.getChecks();
+        if (typeof checks.default !== "undefined") property.default = checks.default;
+        return property;
+      }
+
+      return { not: {} };
+    }
+
+    function walk(shape: Record<string, MongsterSchemaInternal<any>>) {
+      const jsonSchema: any = {
+        type: "object",
+        properties: {},
+        required: [],
+      };
+      for (const [k, rawSchema] of Object.entries(shape)) {
+        const unwrapped = unwrapSchema(rawSchema);
+        if (!(rawSchema instanceof OptionalSchema)) jsonSchema.required.push(k);
+        jsonSchema.properties[k] = makeJsonSchema(unwrapped);
+      }
+      return jsonSchema;
+    }
+
+    return walk(this.#shape);
   }
 }

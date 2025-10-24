@@ -11,6 +11,9 @@ import type {
   Document,
   EstimatedDocumentCountOptions,
   Filter,
+  FindOneAndDeleteOptions,
+  FindOneAndReplaceOptions,
+  FindOneAndUpdateOptions,
   FindOneOptions,
   FindOptions,
   Flatten,
@@ -29,9 +32,10 @@ import type {
   WithoutId,
 } from "mongodb";
 import type { MongsterClient } from "../client";
-import { Query } from "../queries/find/Query";
+import { FindQuery } from "../queries/FindQuery";
 import type { MongsterSchema } from "../schema/schema";
 import type { MongsterFilter, MongsterUpdateFilter } from "../types/types.filter";
+import type { SyncIndexResponse } from "../types/types.model";
 import type { AllFilterKeys } from "../types/types.query";
 import type { InferSchemaInputType, InferSchemaType } from "../types/types.schema";
 
@@ -100,11 +104,7 @@ export class MongsterModel<
     return this.#collectionName;
   }
 
-  async syncIndexes(force = false): Promise<{
-    created: number;
-    dropped: number;
-    unchanged: number;
-  }> {
+  async syncIndexes(force = false): Promise<SyncIndexResponse> {
     if (!this.#connection.getOptions().autoIndex || (this.#indexSynced && !force)) {
       return { created: 0, dropped: 0, unchanged: 0 };
     }
@@ -224,7 +224,10 @@ export class MongsterModel<
   /**
    * Insert a document to the collection. Returns the created document.
    */
-  async create(input: OptionalUnlessRequiredId<T>, options?: InsertOneOptions): Promise<OT | null> {
+  async createOne(
+    input: OptionalUnlessRequiredId<T>,
+    options?: InsertOneOptions,
+  ): Promise<OT | null> {
     await this.syncIndexes();
 
     const collection = this.getCollection();
@@ -273,11 +276,11 @@ export class MongsterModel<
     return estimate;
   }
 
-  find(filter: MongsterFilter<OT>, options?: FindOptions & Abortable): Query<T, OT> {
+  find(filter: MongsterFilter<OT>, options?: FindOptions & Abortable): FindQuery<T, OT> {
     const collection = this.getCollection();
 
     const cursor = collection.find<OT>(filter as Filter<OT>, options);
-    return new Query<T, OT>(cursor);
+    return new FindQuery<T, OT>(cursor);
   }
 
   async findOne(
@@ -339,6 +342,23 @@ export class MongsterModel<
     return result;
   }
 
+  async findOneAndUpdate(
+    filter: MongsterFilter<OT>,
+    updateData: MongsterUpdateFilter<OT>,
+    options?: FindOneAndUpdateOptions & { includeResultMetadata: true },
+  ): Promise<WithId<OT> | null> {
+    if (options?.upsert) await this.syncIndexes();
+
+    const collection = this.getCollection();
+
+    const result = await collection.findOneAndUpdate(
+      filter as Filter<OT>,
+      updateData as UpdateFilter<OT>,
+      options ?? {},
+    );
+    return result;
+  }
+
   async replaceOne(
     filter: MongsterFilter<OT>,
     replacement: WithoutId<OT>,
@@ -349,6 +369,41 @@ export class MongsterModel<
     const collection = this.getCollection();
 
     const result = await collection.replaceOne(filter as Filter<OT>, replacement, options);
+    return result;
+  }
+
+  async findOneAndReplace(
+    filter: MongsterFilter<OT>,
+    replacement: WithoutId<OT>,
+    options?: FindOneAndReplaceOptions & { includeResultMetadata: true },
+  ): Promise<WithId<OT> | null> {
+    if (options?.upsert) await this.syncIndexes();
+
+    const collection = this.getCollection();
+
+    const result = await collection.findOneAndReplace(
+      filter as Filter<OT>,
+      replacement,
+      options ?? {},
+    );
+    return result;
+  }
+
+  async upsertOne(
+    filter: MongsterFilter<OT>,
+    updateData: OptionalUnlessRequiredId<T>,
+    options?: UpdateOptions & { sort?: Sort },
+  ): Promise<UpdateResult<OT>> {
+    await this.syncIndexes();
+
+    const collection = this.getCollection();
+    const parsedData = this.#schema.parse(updateData);
+
+    const result = await collection.updateOne(
+      filter as Filter<OT>,
+      parsedData as UpdateFilter<OT>,
+      { ...options, upsert: true },
+    );
     return result;
   }
 
@@ -363,6 +418,16 @@ export class MongsterModel<
     const collection = this.getCollection();
 
     const result = await collection.deleteMany(filter as Filter<OT>, options);
+    return result;
+  }
+
+  async findOneAndDelete(
+    filter: MongsterFilter<OT>,
+    options?: FindOneAndDeleteOptions & { includeResultMetadata: true },
+  ): Promise<WithId<OT> | null> {
+    const collection = this.getCollection();
+
+    const result = await collection.findOneAndDelete(filter as Filter<OT>, options ?? {});
     return result;
   }
 

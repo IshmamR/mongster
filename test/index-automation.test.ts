@@ -159,7 +159,7 @@ describe("Index Automation with MongoDB", () => {
 
       const Customer = client.model("customers_test6", customerSchema);
 
-      await Customer.create({ email: "test@example.com", name: "Test User" });
+      await Customer.createOne({ email: "test@example.com", name: "Test User" });
 
       const collection = Customer.getCollection();
       const indexes = await collection.listIndexes().toArray();
@@ -349,8 +349,8 @@ describe("Index Automation with MongoDB", () => {
 
       await tempClient.connect(mongod!.getUri(), { autoIndex: { syncOnConnect: true } });
 
-      await Model.create({ username: "user1", age: 25 });
-      await Model.create({ username: "user2", age: 30 });
+      await Model.createOne({ username: "user1", age: 25 });
+      await Model.createOne({ username: "user2", age: 30 });
 
       const users = await Model.find({});
       expect(users.length).toBe(2);
@@ -358,7 +358,7 @@ describe("Index Automation with MongoDB", () => {
       const found = await Model.findOne({ username: "user1" });
       expect(found?.age).toBe(25);
 
-      await expect(Model.create({ username: "user1", age: 35 })).rejects.toThrow();
+      await expect(Model.createOne({ username: "user1", age: 35 })).rejects.toThrow();
 
       await tempClient.disconnect();
     });
@@ -373,9 +373,9 @@ describe("Index Automation with MongoDB", () => {
 
       const Account = client.model("accounts_test11", accountSchema);
 
-      await Account.create({ accountNumber: "ACC001", balance: 1000 });
+      await Account.createOne({ accountNumber: "ACC001", balance: 1000 });
 
-      expect(Account.create({ accountNumber: "ACC001", balance: 2000 })).rejects.toThrow();
+      expect(Account.createOne({ accountNumber: "ACC001", balance: 2000 })).rejects.toThrow();
     });
 
     test("should handle empty schema (no indexes)", async () => {
@@ -596,7 +596,7 @@ describe("Index Automation with MongoDB", () => {
       const Model = client.model("sync_during_writes_test", schema);
 
       const writePromises = Array.from({ length: 10 }, (_, i) =>
-        Model.create({ userId: `user${i}`, counter: i }),
+        Model.createOne({ userId: `user${i}`, counter: i }),
       );
 
       const syncPromise = Model.syncIndexes();
@@ -766,8 +766,8 @@ describe("Index Automation with MongoDB", () => {
       const firstResult = await Model.syncIndexes();
       expect(firstResult.created).toBe(1);
 
-      await Model.create({ field: "test1" });
-      await Model.create({ field: "test2" });
+      await Model.createOne({ field: "test1" });
+      await Model.createOne({ field: "test2" });
 
       const secondResult = await Model.syncIndexes();
       expect(secondResult.created).toBe(0);
@@ -819,7 +819,7 @@ describe("Index Automation with MongoDB", () => {
 
       const Model = client.model("findone_autosync_test", schema);
 
-      await Model.create({ email: "test@example.com", name: "Test" });
+      await Model.createOne({ email: "test@example.com", name: "Test" });
 
       const found = await Model.findOne({ email: "test@example.com" });
       expect(found).toBeDefined();
@@ -1023,8 +1023,8 @@ describe("Index Automation with MongoDB", () => {
       const result = await Model.syncIndexes();
       expect(result.created).toBe(2);
 
-      await Model.create({ requiredField: "test" });
-      await Model.create({ requiredField: "test2", optionalField: "optional" });
+      await Model.createOne({ requiredField: "test" });
+      await Model.createOne({ requiredField: "test2", optionalField: "optional" });
 
       const collection = Model.getCollection();
       const indexes = await collection.listIndexes().toArray();

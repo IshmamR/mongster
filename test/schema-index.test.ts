@@ -432,22 +432,24 @@ describe("Schema Index System", () => {
 
   describe("Nested MongsterSchema indexes", () => {
     test("should collect indexes from nested MongsterSchema instances", () => {
-      const userSchema = M.schema({
+      const userSchema = M.object({
         name: M.string().index(),
         email: M.string().uniqueIndex(),
       }).addIndex({ name: 1, email: 1 });
 
-      const addressSchema = M.schema({
+      const addressSchema = M.object({
         street: M.string().textIndex(),
         city: M.string().index(),
         zipCode: M.string().sparseIndex(),
-      }).addIndex({ city: 1, zipCode: 1 });
+      })
+        .addIndex({ city: 1, zipCode: 1 })
+        .addIndex({ zipCode: 1, street: 1 });
 
       const mainSchema = M.schema({
-        user: userSchema as any,
-        address: addressSchema as any,
+        user: userSchema,
+        address: addressSchema,
         metadata: M.object({
-          nested: userSchema as any,
+          nested: userSchema,
         }),
       });
 
@@ -481,6 +483,10 @@ describe("Schema Index System", () => {
 
       expect(indexes).toContainEqual({
         key: { "address.city": 1, "address.zipCode": 1 },
+      });
+
+      expect(indexes).toContainEqual({
+        key: { "address.street": 1, "address.zipCode": 1 },
       });
 
       expect(indexes).toContainEqual({
@@ -886,8 +892,8 @@ describe("Schema Index System", () => {
         expect(Array.isArray(indexes)).toBe(true);
 
         indexes.forEach((index) => {
-          if (typeof index === "object" && index !== null && "key" in index && (index as any).key) {
-            Object.values((index as any).key).forEach((direction) => {
+          if (typeof index === "object" && index !== null && "key" in index && index.key) {
+            Object.values(index.key).forEach((direction) => {
               expect([1, -1, "hashed", "text"]).toContain(direction);
             });
           }

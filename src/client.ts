@@ -23,10 +23,6 @@ export class MongsterClient {
     this.#options = { ...this.#options, ...options };
   }
 
-  getOptions() {
-    return this.#options;
-  }
-
   model<CN extends string, SC extends MongsterSchema<any, any>>(collectionName: CN, schema: SC) {
     this.#schemas.set(collectionName, schema);
     const model = new MongsterModel(this, collectionName, schema);
@@ -55,16 +51,12 @@ export class MongsterClient {
     do {
       try {
         const client = await MongoClient.connect(this.#uri, mongoClientOptions);
-        await client.db("admin").command({ ping: 1 });
         this.#client = client;
         this.#dbName = client.options.dbName;
         this.#connected = true;
 
-        if (autoIndex && typeof autoIndex !== "boolean" && autoIndex?.syncOnConnect) {
-          const promises = this.#models
-            .values()
-            .map((model) => model.syncIndexes().catch(() => {}));
-          await Promise.all(promises);
+        if (typeof autoIndex === "object" && autoIndex.syncOnConnect) {
+          await this.syncIndexes();
         }
 
         return;
@@ -85,6 +77,11 @@ export class MongsterClient {
     throw new Error("Failed to connect to database");
   }
 
+  async syncIndexes() {
+    const promises = this.#models.values().map((model) => model.syncIndexes().catch(() => {}));
+    await Promise.all(promises);
+  }
+
   async disconnect(): Promise<void> {
     if (!this.#client) return;
     await this.#client.close();
@@ -92,10 +89,10 @@ export class MongsterClient {
     this.#client = undefined;
   }
 
-  async ping(): Promise<boolean> {
+  async ping(dbToPing = "admin"): Promise<boolean> {
     if (!this.#client) return false;
     try {
-      await this.#client.db("admin").command({ ping: 1 });
+      await this.#client.db(dbToPing).command({ ping: 1 });
       return true;
     } catch {
       return false;
@@ -114,5 +111,9 @@ export class MongsterClient {
   getDb(name?: string): Db {
     if (!this.#client) throw new Error("DB not connected");
     return this.#client.db(name ?? this.#dbName ?? "test");
+  }
+
+  getOptions() {
+    return this.#options;
   }
 }

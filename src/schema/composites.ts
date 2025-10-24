@@ -1,6 +1,18 @@
+import type { IndexDescription } from "mongodb";
 import { MError } from "../error";
-import type { ObjectInput, ObjectOutput, Resolve, ResolveTuple } from "../types/types.schema";
-import { MongsterSchemaBase, WithDefaultSchema } from "./base";
+import type { AllFilterKeys } from "../types/types.query";
+import type {
+  MongsterIndexDirection,
+  MongsterIndexOptions,
+  MongsterSchemaOptions,
+  ObjectInput,
+  ObjectOutput,
+  Resolve,
+  ResolveTuple,
+  WithTimestamps,
+} from "../types/types.schema";
+import { MongsterSchemaInternal, WithDefaultSchema } from "./base";
+import { MongsterSchema } from "./schema";
 
 interface ObjectChecks<O> {
   default?: O;
@@ -8,17 +20,24 @@ interface ObjectChecks<O> {
 }
 
 export class ObjectSchema<
-  T extends Record<string, MongsterSchemaBase<any>>,
+  T extends Record<string, MongsterSchemaInternal<any>>,
   $T = Resolve<ObjectOutput<T>>,
   $I = Resolve<ObjectInput<T>>,
-> extends MongsterSchemaBase<$T, $I> {
+> extends MongsterSchemaInternal<$T, $I> {
   declare $type: $T;
   declare $input: $I;
+
+  protected rootIndexes: IndexDescription[] = [];
+  protected options: MongsterSchemaOptions = {};
 
   #shape: T;
   #checks: ObjectChecks<$T>;
 
   constructor(shape: T, checks: ObjectChecks<$T> = {}) {
+    for (const [_, rawSchema] of Object.entries(shape)) {
+      if (rawSchema instanceof MongsterSchema) throw new Error("MongsterSchema cannot be embedded");
+    }
+
     super();
     this.#shape = shape;
     this.#checks = checks;
@@ -26,6 +45,34 @@ export class ObjectSchema<
 
   getShape(): T {
     return this.#shape;
+  }
+
+  getChecks(): ObjectChecks<$T> {
+    return this.#checks;
+  }
+
+  getRootIndexes(path: string): IndexDescription[] {
+    return this.rootIndexes.map((ri) => {
+      const keys = Object.keys(ri.key);
+      const vals = Object.values(ri.key);
+      const merged = Object.fromEntries(keys.map((k, i) => [`${path}.${k}`, vals[i]]));
+      return { ...ri, key: merged };
+    });
+  }
+
+  addIndex<K extends AllFilterKeys<$T>>(
+    keys: Record<K, MongsterIndexDirection>,
+    options?: MongsterIndexOptions<$T>,
+  ): this {
+    const clone = this.clone();
+    clone.rootIndexes.push({ key: keys, ...options });
+    return clone;
+  }
+
+  withTimestamps(): ObjectSchema<T, WithTimestamps<$T>> {
+    const clone = this.clone();
+    clone.options = { ...this.options, withTimestamps: true };
+    return clone as ObjectSchema<T, WithTimestamps<$T>>;
   }
 
   default(o: $T): WithDefaultSchema<$T> {
@@ -39,7 +86,10 @@ export class ObjectSchema<
   }
 
   clone(): this {
-    return new ObjectSchema(this.#shape, { ...this.#checks }) as this;
+    const clone = new ObjectSchema(this.#shape, { ...this.#checks }) as this;
+    clone.rootIndexes = [...this.rootIndexes];
+    clone.options = { ...this.options };
+    return clone;
   }
 
   parse(v: unknown): $T {
@@ -54,7 +104,7 @@ export class ObjectSchema<
     const out: Record<string, unknown> = {};
     for (const [k, s] of Object.entries(this.#shape)) {
       try {
-        out[k] = (s as MongsterSchemaBase<any>).parse((v as any)[k]);
+        out[k] = (s as MongsterSchemaInternal<any>).parse((v as any)[k]);
       } catch (err) {
         throw new MError(`${k}: ${(err as MError).message}`, {
           cause: err,
@@ -72,10 +122,10 @@ interface UnionChecks<U> {
 }
 
 export class UnionSchema<
-  T extends MongsterSchemaBase<any>[],
+  T extends MongsterSchemaInternal<any>[],
   $T = T[number]["$type"],
   $I = T[number]["$input"],
-> extends MongsterSchemaBase<$T, $I> {
+> extends MongsterSchemaInternal<$T, $I> {
   declare $type: $T;
   declare $input: $I;
 
@@ -92,13 +142,23 @@ export class UnionSchema<
     return this.#shapes;
   }
 
+  getChecks(): UnionChecks<$T> {
+    return this.#checks;
+  }
+
   default(d: $T): WithDefaultSchema<$T> {
-    const unionSchema = new UnionSchema(this.#shapes, { ...this.#checks, default: d });
+    const unionSchema = new UnionSchema(this.#shapes, {
+      ...this.#checks,
+      default: d,
+    });
     return new WithDefaultSchema(unionSchema);
   }
 
   defaultFn(fn: () => $T): WithDefaultSchema<$T> {
-    const unionSchema = new UnionSchema(this.#shapes, { ...this.#checks, defaultFn: fn });
+    const unionSchema = new UnionSchema(this.#shapes, {
+      ...this.#checks,
+      defaultFn: fn,
+    });
     return new WithDefaultSchema(unionSchema);
   }
 
@@ -137,10 +197,10 @@ interface TupleChecks<T> {
 }
 
 export class TupleSchema<
-  T extends MongsterSchemaBase<any, any>[],
+  T extends MongsterSchemaInternal<any, any>[],
   $T = ResolveTuple<{ [K in keyof T]: T[K]["$type"] }>,
   $I = ResolveTuple<{ [K in keyof T]: T[K]["$input"] }>,
-> extends MongsterSchemaBase<$T, $I> {
+> extends MongsterSchemaInternal<$T, $I> {
   declare $type: $T;
   declare $input: $I;
 
@@ -157,13 +217,23 @@ export class TupleSchema<
     return this.#shapes;
   }
 
+  getChecks(): TupleChecks<$T> {
+    return this.#checks;
+  }
+
   default(d: $T): WithDefaultSchema<$T> {
-    const tupleSchema = new TupleSchema(this.#shapes, { ...this.#checks, default: d });
+    const tupleSchema = new TupleSchema(this.#shapes, {
+      ...this.#checks,
+      default: d,
+    });
     return new WithDefaultSchema(tupleSchema);
   }
 
   defaultFn(fn: () => $T): WithDefaultSchema<$T> {
-    const tupleSchema = new TupleSchema(this.#shapes, { ...this.#checks, defaultFn: fn });
+    const tupleSchema = new TupleSchema(this.#shapes, {
+      ...this.#checks,
+      defaultFn: fn,
+    });
     return new WithDefaultSchema(tupleSchema);
   }
 

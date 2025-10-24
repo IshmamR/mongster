@@ -31,7 +31,7 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("default_fn_test", schema);
 
-      const doc = await Model.create({ name: "test" });
+      const doc = await Model.createOne({ name: "test" });
 
       expect(doc?.createdAt).toBeInstanceOf(Date);
       expect(doc?.counter).toBeTypeOf("number");
@@ -61,7 +61,7 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("objectid_test", schema);
 
-      const doc = await Model.create({ name: "test" });
+      const doc = await Model.createOne({ name: "test" });
 
       expect(doc?._id).toBeInstanceOf(ObjectId);
     });
@@ -77,10 +77,10 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("nested_optional_test", schema);
 
-      const doc1 = await Model.create({ name: "user1" });
+      const doc1 = await Model.createOne({ name: "user1" });
       expect(doc1?.profile).toBeUndefined();
 
-      const doc2 = await Model.create({ name: "user2", profile: { bio: "hello" } });
+      const doc2 = await Model.createOne({ name: "user2", profile: { bio: "hello" } });
       expect(doc2?.profile?.bio).toBe("hello");
       expect(doc2?.profile?.age).toBeUndefined();
     });
@@ -93,7 +93,7 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("custom_id_test", schema);
 
-      const doc = await Model.create({ _id: customId, name: "test" });
+      const doc = await Model.createOne({ _id: customId, name: "test" });
 
       expect(doc?._id.toString()).toBe(customId.toString());
     });
@@ -110,7 +110,7 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("nested_update_test", schema);
 
-      await Model.create({ profile: { name: "John", age: 30 } });
+      await Model.createOne({ profile: { name: "John", age: 30 } });
 
       const result = await Model.updateOne(
         { "profile.name": "John" },
@@ -168,7 +168,7 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("inc_test", schema);
 
-      await Model.create({ counter: 10, name: "test" });
+      await Model.createOne({ counter: 10, name: "test" });
 
       await Model.updateOne({ name: "test" }, { $inc: { counter: 5 } });
 
@@ -184,7 +184,7 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("push_test", schema);
 
-      await Model.create({ tags: ["tag1"], name: "test" });
+      await Model.createOne({ tags: ["tag1"], name: "test" });
 
       await Model.updateOne({ name: "test" }, { $push: { tags: "tag2" } } as any);
 
@@ -200,7 +200,7 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("unset_test", schema);
 
-      await Model.create({ name: "test", description: "desc" });
+      await Model.createOne({ name: "test", description: "desc" });
 
       await Model.updateOne({ name: "test" }, { $unset: { description: "" } } as any);
 
@@ -219,7 +219,7 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("replace_test", schema);
 
-      const original = await Model.create({ name: "John", age: 30, status: "active" });
+      const original = await Model.createOne({ name: "John", age: 30, status: "active" });
 
       if (!original) return;
 
@@ -453,10 +453,10 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("validation_min_max_test", schema);
 
-      await expect(Model.create({ age: -1 } as any)).rejects.toThrow();
-      await expect(Model.create({ age: 150 } as any)).rejects.toThrow();
+      await expect(Model.createOne({ age: -1 } as any)).rejects.toThrow();
+      await expect(Model.createOne({ age: 150 } as any)).rejects.toThrow();
 
-      const valid = await Model.create({ age: 50 });
+      const valid = await Model.createOne({ age: 50 });
       expect(valid?.age).toBe(50);
     });
 
@@ -467,10 +467,10 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("validation_string_length_test", schema);
 
-      await expect(Model.create({ username: "ab" } as any)).rejects.toThrow();
-      await expect(Model.create({ username: "a".repeat(21) } as any)).rejects.toThrow();
+      await expect(Model.createOne({ username: "ab" } as any)).rejects.toThrow();
+      await expect(Model.createOne({ username: "a".repeat(21) } as any)).rejects.toThrow();
 
-      const valid = await Model.create({ username: "validuser" });
+      const valid = await Model.createOne({ username: "validuser" });
       expect(valid?.username).toBe("validuser");
     });
 
@@ -481,9 +481,9 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("validation_enum_test", schema);
 
-      await expect(Model.create({ status: "invalid" } as any)).rejects.toThrow();
+      await expect(Model.createOne({ status: "invalid" } as any)).rejects.toThrow();
 
-      const valid = await Model.create({ status: "active" });
+      const valid = await Model.createOne({ status: "active" });
       expect(valid?.status).toBe("active");
     });
 
@@ -495,11 +495,11 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("nullable_optional_test", schema);
 
-      const doc1 = await Model.create({ nullableField: null, optionalField: undefined });
+      const doc1 = await Model.createOne({ nullableField: null, optionalField: undefined });
       expect(doc1?.nullableField).toBeNull();
       expect(doc1?.optionalField).toBeUndefined();
 
-      await expect(Model.create({ nullableField: undefined } as any)).rejects.toThrow();
+      await expect(Model.createOne({ nullableField: undefined } as any)).rejects.toThrow();
     });
   });
 
@@ -511,10 +511,10 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("array_length_test", schema);
 
-      await expect(Model.create({ tags: [] } as any)).rejects.toThrow();
-      await expect(Model.create({ tags: Array(6).fill("tag") } as any)).rejects.toThrow();
+      await expect(Model.createOne({ tags: [] } as any)).rejects.toThrow();
+      await expect(Model.createOne({ tags: Array(6).fill("tag") } as any)).rejects.toThrow();
 
-      const valid = await Model.create({ tags: ["tag1", "tag2"] });
+      const valid = await Model.createOne({ tags: ["tag1", "tag2"] });
       expect(valid?.tags.length).toBe(2);
     });
 
@@ -525,7 +525,7 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("nested_array_test", schema);
 
-      const doc = await Model.create({
+      const doc = await Model.createOne({
         matrix: [
           [1, 2, 3],
           [4, 5, 6],
@@ -546,7 +546,7 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("add_to_set_test", schema);
 
-      await Model.create({ tags: ["tag1", "tag2"], name: "test" });
+      await Model.createOne({ tags: ["tag1", "tag2"], name: "test" });
 
       await Model.updateOne({ name: "test" }, { $addToSet: { tags: "tag2" } } as any);
 
@@ -567,7 +567,7 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("pull_test", schema);
 
-      await Model.create({ numbers: [1, 2, 3, 2, 4], name: "test" });
+      await Model.createOne({ numbers: [1, 2, 3, 2, 4], name: "test" });
 
       await Model.updateOne({ name: "test" }, { $pull: { numbers: 2 } } as any);
 
@@ -586,7 +586,7 @@ describe("CRUD Operations Edge Cases", () => {
       const Model = client.model("objectid_query_test", schema);
 
       const userId = new ObjectId();
-      await Model.create({ userId, name: "test" });
+      await Model.createOne({ userId, name: "test" });
 
       const doc = await Model.findOne({ userId });
       expect(doc?.userId.toString()).toBe(userId.toString());
@@ -622,7 +622,10 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("decimal_test", schema);
 
-      const doc = await Model.create({ price: Decimal128.fromString("99.99"), product: "widget" });
+      const doc = await Model.createOne({
+        price: Decimal128.fromString("99.99"),
+        product: "widget",
+      });
 
       expect(doc?.price).toBeDefined();
       expect(doc?.product).toBe("widget");
@@ -637,7 +640,7 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("concurrent_create_test", schema);
 
-      const promises = Array.from({ length: 10 }, (_, i) => Model.create({ value: i }));
+      const promises = Array.from({ length: 10 }, (_, i) => Model.createOne({ value: i }));
 
       const results = await Promise.all(promises);
 
@@ -655,7 +658,7 @@ describe("CRUD Operations Edge Cases", () => {
 
       const Model = client.model("concurrent_update_test", schema);
 
-      await Model.create({ counter: 0, name: "test" });
+      await Model.createOne({ counter: 0, name: "test" });
 
       const promises = Array.from({ length: 5 }, () =>
         Model.updateOne({ name: "test" }, { $inc: { counter: 1 } }),

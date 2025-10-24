@@ -1,5 +1,5 @@
 import type { SortDirection } from "mongodb";
-import type { BooleanNumber, Prettify, UnionToIntersection } from "./types.common";
+import type { BinaryDigit, Prettify, UnionToIntersection } from "./types.common";
 import type { NoExpandType } from "./types.schema";
 
 type MaxDepth = 6;
@@ -131,7 +131,7 @@ export type ProjectionFromExclusionKeys<T, Paths extends AllProjKeys<T>> = Proje
 
 export type ProjectionRecord<T> = {
   [K in AllProjKeys<T>]?:
-    | BooleanNumber
+    | BinaryDigit
     | { $slice: number | [number, number] }
     | { $elemMatch: Record<keyof T, any> }
     | { $meta: string };

@@ -31,11 +31,11 @@
 ## 🚧 Current Focus (v0.1.0)
 
 ### Query System Foundation
-- [ ] **Model creation** with `createModel()` integration
-- [ ] **Basic CRUD operations**: `find()`, `findOne()`, `insertOne()`, `updateOne()`, `deleteOne()`
-- [ ] **Type-safe query builders** with MongoDB operator support
+- [x] **Model creation** with `createModel()` integration
+- [x] **Basic CRUD operations**: `find()`, `findOne()`, `insertOne()`, `updateOne()`, `deleteOne()`
+- [x] **Type-safe query builders** with MongoDB operator support
 - [ ] **Query execution engine** with proper error handling
-- [ ] **Connection management** and database integration
+- [x] **Connection management** and database integration
 
 ### Core Features Pipeline
 - [ ] **Hook system** (pre/post save, validate, remove, find)

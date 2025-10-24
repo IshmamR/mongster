@@ -1,4 +1,4 @@
-import { ArraySchema, type MongsterSchemaBase } from "./base";
+import { ArraySchema, type MongsterSchemaInternal } from "./base";
 import { BinarySchema, Decimal128Schema, ObjectIdSchema } from "./bsons";
 import { ObjectSchema, TupleSchema, UnionSchema } from "./composites";
 import { BooleanSchema, DateSchema, NumberSchema, StringSchema } from "./primitives";
@@ -21,41 +21,41 @@ export class MongsterSchemaBuilder {
    * Fixed-position array (tuple).
    * @params items
    */
-  tuple<T extends MongsterSchemaBase<any>[]>(items: [...T]) {
+  tuple<T extends MongsterSchemaInternal<any>[]>(items: [...T]) {
     return new TupleSchema(items);
   }
   /**
    * Same thing as a `.tuple()` -> But takes the items as a args
    */
-  fixedArrayOf<T extends MongsterSchemaBase<any>[]>(...items: T) {
+  fixedArrayOf<T extends MongsterSchemaInternal<any>[]>(...items: T) {
     return new TupleSchema(items);
   }
   /**
    * An embedded document's schema representation
    * @param shape
    */
-  object<T extends Record<PropertyKey, MongsterSchemaBase<any>>>(shape: T) {
+  object<T extends Record<PropertyKey, MongsterSchemaInternal<any>>>(shape: T) {
     return new ObjectSchema(shape);
   }
   /**
    * An array, it's in the name...
    * @param item
    */
-  array<T extends MongsterSchemaBase<any>>(item: T) {
+  array<T extends MongsterSchemaInternal<any>>(item: T) {
     return new ArraySchema<T["$type"], T["$input"]>(item);
   }
   /**
    * Use whatever mixture of types/shapes you want. Mongo does not care, why should we ?
    * @param shapes
    */
-  union<T extends MongsterSchemaBase<any>[]>(...shapes: T) {
+  union<T extends MongsterSchemaInternal<any>[]>(...shapes: T) {
     return new UnionSchema(shapes);
   }
   /**
    * Similar to `.union()` -> Only difference is it takes an array as param instead
    * @param shapes
    */
-  oneOf<T extends MongsterSchemaBase<any>[]>(shapes: [...T]) {
+  oneOf<T extends MongsterSchemaInternal<any>[]>(shapes: [...T]) {
     return new UnionSchema(shapes);
   }
 
@@ -73,7 +73,7 @@ export class MongsterSchemaBuilder {
    * A collection's schema representation
    * @param shape
    */
-  schema<T extends Record<string, MongsterSchemaBase<any>>>(shape: T) {
+  schema<T extends Record<string, MongsterSchemaInternal<any>>>(shape: T) {
     return new MongsterSchema(shape);
   }
 }

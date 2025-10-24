@@ -6,10 +6,15 @@ export abstract class MongsterSchemaBase<T, I = T & any> {
   declare $type: T;
   declare $input: I;
 
-  #idxMeta: SchemaMeta<T> = { options: {} };
-
   abstract clone(): this;
   abstract parse(v: unknown): T;
+}
+
+export abstract class MongsterSchemaInternal<T, I = T & any> extends MongsterSchemaBase<T, I> {
+  declare $type: T;
+  declare $input: I;
+
+  #idxMeta: SchemaMeta<T> = { options: {} };
 
   getIdxMeta(): SchemaMeta<T> {
     return this.#idxMeta;
@@ -98,17 +103,17 @@ export abstract class MongsterSchemaBase<T, I = T & any> {
   }
 }
 
-class CustomValidationSchema<T> extends MongsterSchemaBase<T, T> {
+class CustomValidationSchema<T> extends MongsterSchemaInternal<T, T> {
   declare $type: T;
   declare $input: T;
 
   // @internal used internally
-  protected inner: MongsterSchemaBase<T>;
+  protected inner: MongsterSchemaInternal<T>;
 
   #validator: ValidatorFunc<T>;
   #msg?: string;
 
-  constructor(inner: MongsterSchemaBase<T>, validator: ValidatorFunc<T>, msg?: string) {
+  constructor(inner: MongsterSchemaInternal<T>, validator: ValidatorFunc<T>, msg?: string) {
     super();
     this.#validator = validator;
     this.#msg = msg;
@@ -127,14 +132,14 @@ class CustomValidationSchema<T> extends MongsterSchemaBase<T, T> {
   }
 }
 
-export class WithDefaultSchema<T> extends MongsterSchemaBase<T, T | undefined> {
+export class WithDefaultSchema<T> extends MongsterSchemaInternal<T, T | undefined> {
   declare $type: T;
   declare $input: T | undefined;
 
   // @internal used internally
-  protected inner: MongsterSchemaBase<T>;
+  protected inner: MongsterSchemaInternal<T>;
 
-  constructor(inner: MongsterSchemaBase<T>) {
+  constructor(inner: MongsterSchemaInternal<T>) {
     super();
     this.inner = inner;
   }
@@ -148,14 +153,14 @@ export class WithDefaultSchema<T> extends MongsterSchemaBase<T, T | undefined> {
   }
 }
 
-export class OptionalSchema<T> extends MongsterSchemaBase<T | undefined, T | undefined> {
+export class OptionalSchema<T> extends MongsterSchemaInternal<T | undefined, T | undefined> {
   declare $type: T | undefined;
   declare $input: T | undefined;
 
   // @internal used internally
-  protected inner: MongsterSchemaBase<T>;
+  protected inner: MongsterSchemaInternal<T>;
 
-  constructor(inner: MongsterSchemaBase<T>) {
+  constructor(inner: MongsterSchemaInternal<T>) {
     super();
     this.inner = inner;
   }
@@ -169,14 +174,14 @@ export class OptionalSchema<T> extends MongsterSchemaBase<T | undefined, T | und
   }
 }
 
-export class NullableSchema<T> extends MongsterSchemaBase<T | null, T | null> {
+export class NullableSchema<T> extends MongsterSchemaInternal<T | null, T | null> {
   declare $type: T | null;
   declare $input: T | null;
 
   // @internal used internally
-  protected inner: MongsterSchemaBase<T>;
+  protected inner: MongsterSchemaInternal<T>;
 
-  constructor(inner: MongsterSchemaBase<T>) {
+  constructor(inner: MongsterSchemaInternal<T>) {
     super();
     this.inner = inner;
   }
@@ -197,20 +202,24 @@ interface ArrayChecks<A> {
   defaultFn?: () => A;
 }
 
-export class ArraySchema<T, I> extends MongsterSchemaBase<T[], I[]> {
+export class ArraySchema<T, I> extends MongsterSchemaInternal<T[], I[]> {
   declare $type: T[];
   declare $input: I[];
 
-  #shapes: MongsterSchemaBase<T, I>;
+  #shapes: MongsterSchemaInternal<T, I>;
   #checks: ArrayChecks<T[]>;
 
-  constructor(shapes: MongsterSchemaBase<T, I>, checks: ArrayChecks<T[]> = {}) {
+  constructor(shapes: MongsterSchemaInternal<T, I>, checks: ArrayChecks<T[]> = {}) {
     super();
     this.#shapes = shapes;
     this.#checks = checks;
   }
 
-  getShapes(): MongsterSchemaBase<T, I> {
+  getChecks(): ArrayChecks<T[]> {
+    return this.#checks;
+  }
+
+  getShapes(): MongsterSchemaInternal<T, I> {
     return this.#shapes;
   }
 

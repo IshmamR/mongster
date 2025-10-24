@@ -22,7 +22,7 @@ export type NegativeNumber<N extends number> = `${N}` extends `-${string}`
 /**
  * 0 | 1
  */
-export type BooleanNumber = 0 | 1;
+export type BinaryDigit = 0 | 1;
 
 /**
  * As the name suggests

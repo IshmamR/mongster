@@ -5,12 +5,12 @@ import type {
   ProjectionFromInclusionKeys,
   ProjectionRecord,
   SchemaSort,
-} from "../../types/types.query";
+} from "../types/types.query";
 
 type PromiseOnFulfilled<Res> = ((value: Res[]) => Res[] | PromiseLike<Res[]>) | null | undefined;
 type PromiseOnRejected = ((reason: unknown) => PromiseLike<never>) | null | undefined;
 
-export class Query<T, OT> {
+export class FindQuery<T, OT> {
   #cursor: FindCursor<OT>;
 
   projection?: ProjectionRecord<OT>;
@@ -47,7 +47,8 @@ export class Query<T, OT> {
 
   include<K extends AllProjKeys<OT>>(paths: K[]) {
     for (const path of paths) {
-      if (path === "") continue;
+      if (typeof path !== "string") continue;
+      if (path.trim() === "") continue;
       if (typeof this.projection !== "undefined") {
         this.projection[path] = 1;
       } else {
@@ -55,12 +56,13 @@ export class Query<T, OT> {
       }
     }
 
-    return this as Query<T, ProjectionFromInclusionKeys<OT, K>>;
+    return this as FindQuery<T, ProjectionFromInclusionKeys<OT, K>>;
   }
 
   exclude<K extends AllProjKeys<OT>>(paths: K[]) {
     for (const path of paths) {
-      if (path === "") continue;
+      if (typeof path !== "string") continue;
+      if (path.trim() === "") continue;
       if (typeof this.projection !== "undefined") {
         this.projection[path] = 0;
       } else {
@@ -68,7 +70,7 @@ export class Query<T, OT> {
       }
     }
 
-    return this as Query<T, ProjectionFromExclusionKeys<OT, K>>;
+    return this as FindQuery<T, ProjectionFromExclusionKeys<OT, K>>;
   }
 
   project<ReturnType = OT>(projection: ProjectionRecord<OT>) {
@@ -78,7 +80,7 @@ export class Query<T, OT> {
       this.projection = projection;
     }
 
-    return this as unknown as Query<T, ReturnType>;
+    return this as unknown as FindQuery<T, ReturnType>;
   }
 
   exec(): Promise<OT[]> {
