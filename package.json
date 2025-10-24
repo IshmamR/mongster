@@ -1,6 +1,6 @@
 {
   "name": "mongster",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -26,7 +26,6 @@
     "build:ts": "tsc -p tsconfig.build.json",
     "build": "bun run build:js && bun run build:ts",
     "clean": "rm -rf dist",
-    "dev": "bun --hot src/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepublishOnly": "bun run clean && bun run build"
   },
@@ -40,7 +39,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
       "default": "./dist/index.js"
     },
     "./package.json": "./package.json"
