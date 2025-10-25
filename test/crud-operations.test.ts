@@ -25,15 +25,15 @@ describe("CRUD Operations Edge Cases", () => {
     test("should handle creating document with defaultFn values", async () => {
       const schema = M.schema({
         name: M.string(),
-        createdAt: M.date().defaultFn(() => new Date()),
         counter: M.number().defaultFn(() => Math.random()),
-      });
+      }).withTimestamps();
 
       const Model = client.model("default_fn_test", schema);
 
       const doc = await Model.createOne({ name: "test" });
 
       expect(doc?.createdAt).toBeInstanceOf(Date);
+      expect(doc?.updatedAt).toBeInstanceOf(Date);
       expect(doc?.counter).toBeTypeOf("number");
       expect(doc?.name).toBe("test");
     });

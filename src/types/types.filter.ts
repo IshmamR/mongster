@@ -192,6 +192,12 @@ export type AllProperties<T> = {
   [P in AllFilterKeys<T> & string]?: PropertyType<T, P>;
 };
 
+// remove those nasty `undefined.$` from the keys. but do keep if undefined is a defined key in the schema -_-
+type KeysOfArrayElementType<
+  T,
+  K = `${KeysOfAType<AllProperties<T>, any[]>}.$${"" | `[${string}]`}`,
+> = "undefined" extends keyof T ? K : K extends `undefined.$${string}` ? never : K;
+
 /**
  * Returns all array-specific element dot-notation properties of a schema with their corresponding types.
  *
@@ -203,30 +209,12 @@ export type AllProperties<T> = {
  * }
  */
 export type ArrayElementsProperties<T> = {
-  [P in `${KeysOfAType<AllProperties<T>, any[]>}.$${"" | `[${string}]`}`]?: ArrayElement<
+  [P in KeysOfArrayElementType<T>]?: ArrayElement<
     PropertyTypeBase<T, P extends `${infer K}.$${string}` ? K : never>
   >;
 };
 
-/**
- * Returns all array-specific nested dot-notation properties of a schema without type lookup.
- *
- * @example
- * {
- *   'objectList.$.foo': any;
- *   'objectList.$[].foo': any;
- *   'objectList.$[element].foo': any;
- * }
- */
-export type ArrayNestedProperties<T> = {
-  [P in `${KeysOfAType<AllProperties<T>, Record<string, any>[]>}.$${
-    | ""
-    | `[${string}]`}.${string}`]?: any;
-};
-
-export type MatchKeysAndValues<T> = AllProperties<T> &
-  ArrayElementsProperties<T> &
-  ArrayNestedProperties<T>;
+export type MatchKeysAndValues<T> = AllProperties<T> & ArrayElementsProperties<T>;
 
 export interface MongsterUpdateFilter<T> {
   $currentDate?: OnlyFieldsOfType<T, Date | Timestamp, true | { $type: "date" | "timestamp" }>;
@@ -234,7 +222,7 @@ export interface MongsterUpdateFilter<T> {
   $min?: MatchKeysAndValues<T>;
   $max?: MatchKeysAndValues<T>;
   $mul?: OnlyFieldsOfType<T, NumericType | undefined>;
-  $rename?: Record<string, string>;
+  $rename?: Record<string, AllFilterKeys<T>>;
   $set?: MatchKeysAndValues<T>;
   $setOnInsert?: MatchKeysAndValues<T>;
   $unset?: OnlyFieldsOfType<T, any, "" | 1 | true>;

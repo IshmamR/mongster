@@ -1,5 +1,7 @@
 import type { IndexDescription } from "mongodb";
 import { MError } from "../error";
+import { updateKeysArray } from "../helpers/constants";
+import type { MongsterUpdateFilter } from "../types/types.filter";
 import type { AllFilterKeys } from "../types/types.query";
 import type {
   MongsterIndexDirection,
@@ -94,7 +96,133 @@ export class MongsterSchema<
         });
       }
     }
+
+    if (this.options.withTimestamps) {
+      out.createdAt = new Date();
+      out.updatedAt = new Date();
+    }
+
     return out as $T;
+  }
+
+  parseForUpdate(updateObj: MongsterUpdateFilter<$T>) {
+    Object.keys(updateObj).forEach((key) => {
+      if (!updateKeysArray.includes(key as any)) throw new Error("Invalid update key");
+    });
+
+    const parsedUpdateRecord: MongsterUpdateFilter<$T> = {};
+
+    if (this.options.withTimestamps) {
+      parsedUpdateRecord.$set = {};
+    }
+
+    const processOperator = <K extends keyof MongsterUpdateFilter<$T>>(
+      operator: K,
+      validator?: (val: any, key: string) => void,
+    ) => {
+      const operatorValue = updateObj[operator];
+      if (typeof operatorValue === "undefined") return;
+      if (typeof operatorValue !== "object")
+        throw new Error(`${String(operator)} must be an object`);
+      if (Array.isArray(operatorValue)) throw new Error(`${String(operator)} cannot be an array`);
+
+      let result: any;
+      const keys = Object.keys(operatorValue);
+      if (keys.length) {
+        for (const key of keys) {
+          const val = (operatorValue as any)[key];
+          if (typeof val === "undefined") continue;
+
+          if (validator) validator(val, key);
+
+          if (typeof result !== "undefined") result[key] = val;
+          else result = { [key]: val };
+        }
+      }
+
+      if (result && Object.keys(result).length) {
+        parsedUpdateRecord[operator] = result;
+      }
+    };
+
+    processOperator("$currentDate", (val, key) => {
+      if (typeof val !== "boolean" && typeof val !== "object")
+        throw new Error(`$currentDate.${key} must be a boolean or object with $type`);
+      if (typeof val === "object") {
+        if (Array.isArray(val)) throw new Error(`$currentDate.${key} cannot be an array`);
+        if (val.$type !== "date" && val.$type !== "timestamp")
+          throw new Error(
+            `$currentDate.${key}.$type must be "date" or "timestamp", got "${val.$type}"`,
+          );
+      }
+    });
+
+    processOperator("$inc", (val, key) => {
+      if (typeof val !== "number")
+        throw new Error(`$inc.${key} must be a number, got ${typeof val}`);
+    });
+
+    processOperator("$min");
+
+    processOperator("$max");
+
+    processOperator("$mul", (val, key) => {
+      if (typeof val !== "number")
+        throw new Error(`$mul.${key} must be a number, got ${typeof val}`);
+    });
+
+    processOperator("$rename", (val, key) => {
+      if (typeof val !== "string")
+        throw new Error(`$rename.${key} must be a string, got ${typeof val}`);
+    });
+
+    processOperator("$set");
+
+    processOperator("$setOnInsert");
+
+    processOperator("$unset", (val, key) => {
+      if (val !== "" && val !== 1 && val !== true)
+        throw new Error(`$unset.${key} must be "", 1, or true, got ${JSON.stringify(val)}`);
+    });
+
+    processOperator("$addToSet");
+
+    processOperator("$pop", (val, key) => {
+      if (val !== -1 && val !== 1) throw new Error(`$pop.${key} must be -1 or 1, got ${val}`);
+    });
+
+    processOperator("$pull");
+
+    processOperator("$push");
+
+    processOperator("$pullAll", (val, key) => {
+      if (!Array.isArray(val))
+        throw new Error(`$pullAll.${key} must be an array, got ${typeof val}`);
+    });
+
+    processOperator("$bit", (val, key) => {
+      if (typeof val !== "object")
+        throw new Error(`$bit.${key} must be an object, got ${typeof val}`);
+      if (Array.isArray(val)) throw new Error(`$bit.${key} cannot be an array`);
+      const hasAnd = "and" in val;
+      const hasOr = "or" in val;
+      const hasXor = "xor" in val;
+      const validOperatorCount = [hasAnd, hasOr, hasXor].filter(Boolean).length;
+      if (validOperatorCount !== 1)
+        throw new Error(`$bit.${key} must have exactly one of "and", "or", or "xor" operators`);
+      const operatorVal = val.and ?? val.or ?? val.xor;
+      if (typeof operatorVal !== "number" || !Number.isInteger(operatorVal))
+        throw new Error(`$bit.${key} operator value must be an integer, got ${typeof operatorVal}`);
+    });
+
+    if (this.options.withTimestamps) {
+      parsedUpdateRecord.$currentDate = {
+        ...(parsedUpdateRecord.$currentDate ?? {}),
+        updatedAt: true,
+      } as any;
+    }
+
+    return parsedUpdateRecord;
   }
 
   /**
