@@ -42,3 +42,57 @@ export class MError extends Error {
 }
 
 export { MError as MongsterError };
+
+export class ValidationError extends Error {
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
+
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.name = "ValidationError";
+  }
+}
+
+export class DocumentNotFoundError extends Error {
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
+
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.name = "DocumentNotFoundError";
+  }
+}
+
+export class ConnectionError extends Error {
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
+
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.name = "ConnectionError";
+  }
+}
+
+export class TransactionError extends Error {
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
+
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.name = "TransactionError";
+  }
+}
+
+export class IndexSyncError extends Error {
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
+
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.name = "IndexSyncError";
+  }
+}
+
+export class CollectionError extends Error {
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
+
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.name = "CollectionError";
+  }
+}

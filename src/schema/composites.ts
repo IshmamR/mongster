@@ -114,6 +114,30 @@ export class ObjectSchema<
 
     return out as $T;
   }
+
+  parseForUpdate(v: unknown): $T | undefined {
+    if (v === undefined) return undefined;
+
+    if (typeof v !== "object") throw new MError("Expected an object");
+    if (Array.isArray(v)) throw new MError("Expected an object, but received an array");
+
+    const out: Record<string, unknown> = {};
+    for (const [k, s] of Object.entries(this.#shape)) {
+      try {
+        const parsed = (s as MongsterSchemaInternal<any>).parseForUpdate((v as any)[k]);
+        // Only include defined values
+        if (parsed !== undefined) {
+          out[k] = parsed;
+        }
+      } catch (err) {
+        throw new MError(`${k}: ${(err as MError).message}`, {
+          cause: err,
+        });
+      }
+    }
+
+    return out as $T;
+  }
 }
 
 interface UnionChecks<U> {
@@ -178,6 +202,29 @@ export class UnionSchema<
         v = shape.parse(v);
         isValid = true;
         break;
+      } catch {}
+    }
+
+    if (!isValid) {
+      throw new MError(
+        `Expected one of: ${this.#shapes.map((shape) => shape.constructor.name).join(" | ")}`,
+      );
+    }
+
+    return v as $T;
+  }
+
+  parseForUpdate(v: unknown): $T | undefined {
+    if (v === undefined) return undefined;
+
+    let isValid = false;
+    for (const shape of this.#shapes) {
+      try {
+        v = shape.parseForUpdate(v);
+        if (v !== undefined) {
+          isValid = true;
+          break;
+        }
       } catch {}
     }
 
@@ -261,6 +308,36 @@ export class TupleSchema<
 
       try {
         out[i] = shape.parse(v[i]);
+      } catch (err) {
+        throw new MError(`[${i}] ${(err as MError).message}`, { cause: err });
+      }
+    }
+    return out as $T;
+  }
+
+  parseForUpdate(v: unknown): $T | undefined {
+    if (v === undefined) return undefined;
+
+    if (!Array.isArray(v)) throw new MError("Expected a tuple (must be an array)");
+    if (v.length !== this.#shapes.length) {
+      throw new MError(
+        `Expected tuple of length ${this.#shapes.length}, received of length ${v.length}`,
+      );
+    }
+
+    const out: unknown[] = [];
+    for (let i = 0; i < this.#shapes.length; i++) {
+      const shape = this.#shapes[i];
+      if (!shape) throw new MError(`Invalid schema shape`);
+
+      try {
+        const parsed = shape.parseForUpdate(v[i]);
+        // For tuples, all elements must be present
+        if (parsed === undefined) {
+          out[i] = shape.parse(v[i]);
+        } else {
+          out[i] = parsed;
+        }
       } catch (err) {
         throw new MError(`[${i}] ${(err as MError).message}`, { cause: err });
       }

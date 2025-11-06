@@ -84,7 +84,7 @@ describe("Index Automation with MongoDB", () => {
 
       await Item.syncIndexes();
 
-      const result = await Item.syncIndexes(true);
+      const result = await Item.syncIndexes({ force: true });
       expect(result.created).toBe(0);
       expect(result.dropped).toBe(0);
       expect(result.unchanged).toBe(2);
@@ -108,7 +108,7 @@ describe("Index Automation with MongoDB", () => {
 
       const UpdatedBook = client.model("books_test4", updatedSchema);
 
-      const result = await UpdatedBook.syncIndexes(true);
+      const result = await UpdatedBook.syncIndexes({ force: true });
 
       expect(result.dropped).toBe(1);
       expect(result.unchanged).toBe(2);
@@ -493,7 +493,7 @@ describe("Index Automation with MongoDB", () => {
       });
 
       const UpdatedModel = client.model("index_options_change_test", updatedSchema);
-      const result = await UpdatedModel.syncIndexes(true);
+      const result = await UpdatedModel.syncIndexes({ force: true });
 
       expect(result.dropped).toBe(2);
       expect(result.created).toBe(2);
@@ -523,7 +523,7 @@ describe("Index Automation with MongoDB", () => {
       });
 
       const UpdatedModel = client.model("index_direction_change_test", updatedSchema);
-      const result = await UpdatedModel.syncIndexes(true);
+      const result = await UpdatedModel.syncIndexes({ force: true });
 
       expect(result.dropped).toBe(2);
       expect(result.created).toBe(2);
@@ -550,7 +550,7 @@ describe("Index Automation with MongoDB", () => {
       });
 
       const UpdatedModel = client.model("index_type_change_test", updatedSchema);
-      const result = await UpdatedModel.syncIndexes(true);
+      const result = await UpdatedModel.syncIndexes({ force: true });
 
       expect(result.dropped).toBe(2);
       expect(result.created).toBe(2);
@@ -573,9 +573,9 @@ describe("Index Automation with MongoDB", () => {
       const Model = client.model("concurrent_sync_test", schema);
 
       const results = await Promise.all([
-        Model.syncIndexes(true),
-        Model.syncIndexes(true),
-        Model.syncIndexes(true),
+        Model.syncIndexes({ force: true }),
+        Model.syncIndexes({ force: true }),
+        Model.syncIndexes({ force: true }),
       ]);
 
       results.forEach((result) => {

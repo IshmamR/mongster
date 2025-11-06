@@ -330,7 +330,7 @@ export class MongsterModel<
     return estimate;
   }
 
-  find(filter: MongsterFilter<OT>, options?: FindOptions & Abortable): FindQuery<T, OT> {
+  find(filter: MongsterFilter<OT> = {}, options?: FindOptions & Abortable): FindQuery<T, OT> {
     if (filter !== null && filter !== undefined && typeof filter !== "object") {
       throw new Error("find: filter must be an object");
     }

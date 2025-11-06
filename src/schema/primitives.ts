@@ -80,6 +80,11 @@ export class NumberSchema<TP extends number = number> extends MongsterSchemaInte
 
     return v as TP;
   }
+
+  parseForUpdate(v: unknown): TP | undefined {
+    if (v === undefined) return undefined;
+    return this.parse(v);
+  }
 }
 
 interface StringChecks<S> {
@@ -170,6 +175,11 @@ export class StringSchema<TP extends string = string> extends MongsterSchemaInte
 
     return v as TP;
   }
+
+  parseForUpdate(v: unknown): TP | undefined {
+    if (v === undefined) return undefined;
+    return this.parse(v);
+  }
 }
 
 interface BooleanChecks {
@@ -220,6 +230,11 @@ export class BooleanSchema extends MongsterSchemaInternal<boolean, boolean> {
     }
 
     return v;
+  }
+
+  parseForUpdate(v: unknown): boolean | undefined {
+    if (v === undefined) return undefined;
+    return this.parse(v);
   }
 }
 
@@ -296,6 +311,11 @@ export class DateSchema extends MongsterSchemaInternal<Date, Date> {
     }
 
     return out;
+  }
+
+  parseForUpdate(v: unknown): Date | undefined {
+    if (v === undefined) return undefined;
+    return this.parse(v);
   }
 
   /**

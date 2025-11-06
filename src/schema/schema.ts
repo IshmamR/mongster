@@ -1,5 +1,5 @@
 import type { IndexDescription } from "mongodb";
-import { MError } from "../error";
+import { MError, ValidationError } from "../error";
 import { updateKeysArray } from "../helpers/constants";
 import type { MongsterUpdateFilter } from "../types/types.filter";
 import type { AllFilterKeys } from "../types/types.query";
@@ -12,7 +12,13 @@ import type {
   Resolve,
   WithTimestamps,
 } from "../types/types.schema";
-import { ArraySchema, MongsterSchemaBase, MongsterSchemaInternal, OptionalSchema } from "./base";
+import {
+  ArraySchema,
+  MongsterSchemaBase,
+  MongsterSchemaInternal,
+  NullableSchema,
+  OptionalSchema,
+} from "./base";
 import { BinarySchema, Decimal128Schema, ObjectIdSchema } from "./bsons";
 import { ObjectSchema, TupleSchema, UnionSchema } from "./composites";
 import { BooleanSchema, DateSchema, NumberSchema, StringSchema } from "./primitives";
@@ -21,6 +27,122 @@ function unwrapSchema(s: MongsterSchemaBase<any>): MongsterSchemaInternal<any> {
   let cur: any = s;
   while (cur && cur.inner instanceof MongsterSchemaInternal) cur = cur.inner;
   return cur as MongsterSchemaInternal<any>;
+}
+
+function processOperators<$T>(updateObj: MongsterUpdateFilter<$T>): MongsterUpdateFilter<$T> {
+  const parsedUpdateRecord: MongsterUpdateFilter<$T> = {};
+
+  function processOperator<K extends keyof MongsterUpdateFilter<$T>>(
+    operator: K,
+    validator?: (val: any, key: string) => void,
+  ) {
+    const operatorValue = updateObj[operator];
+    if (typeof operatorValue === "undefined") return;
+    if (typeof operatorValue !== "object") {
+      throw new ValidationError(`${operator} must be an object`);
+    }
+    if (Array.isArray(operatorValue)) throw new ValidationError(`${operator} cannot be an array`);
+
+    let result: any;
+    const keys = Object.keys(operatorValue);
+    if (keys.length) {
+      for (const key of keys) {
+        const val = (operatorValue as any)[key];
+        if (typeof val === "undefined") continue;
+
+        if (validator) validator(val, key);
+
+        if (typeof result !== "undefined") result[key] = val;
+        else result = { [key]: val };
+      }
+    }
+
+    if (result && Object.keys(result).length) {
+      parsedUpdateRecord[operator] = result;
+    }
+  }
+
+  processOperator("$currentDate", (val, key) => {
+    if (typeof val !== "boolean" && typeof val !== "object") {
+      throw new ValidationError(`$currentDate.${key} must be a boolean or object with $type field`);
+    }
+    if (typeof val === "object") {
+      if (Array.isArray(val)) throw new ValidationError(`$currentDate.${key} cannot be an array`);
+      if (val.$type !== "date" && val.$type !== "timestamp") {
+        throw new ValidationError(
+          `$currentDate.${key}.$type must be "date" or "timestamp", got "${val.$type}"`,
+        );
+      }
+    }
+  });
+
+  processOperator("$inc", (val, key) => {
+    if (typeof val === "number") return;
+    throw new ValidationError(`$inc.${key} must be a number, got ${typeof val}`);
+  });
+
+  processOperator("$min");
+  processOperator("$max");
+
+  processOperator("$mul", (val, key) => {
+    if (typeof val === "number") return;
+    throw new ValidationError(`$mul.${key} must be a number, got ${typeof val}`);
+  });
+
+  processOperator("$rename", (val, key) => {
+    if (typeof val === "string") return;
+    throw new ValidationError(`$rename.${key} must be a string, got ${typeof val}`);
+  });
+
+  processOperator("$set");
+  processOperator("$setOnInsert");
+
+  processOperator("$unset", (val, key) => {
+    if (val !== "" && val !== 1 && val !== true) {
+      throw new ValidationError(`$unset.${key} must be "", 1, or true, got ${JSON.stringify(val)}`);
+    }
+  });
+
+  processOperator("$addToSet");
+
+  processOperator("$pop", (val, key) => {
+    if (val === -1 || val === 1) return;
+    throw new ValidationError(`$pop.${key} must be -1 or 1, got ${val}`);
+  });
+
+  processOperator("$pull");
+  processOperator("$push");
+
+  processOperator("$pullAll", (val, key) => {
+    if (Array.isArray(val)) return;
+    throw new ValidationError(`$pullAll.${key} must be an array, got ${typeof val}`);
+  });
+
+  processOperator("$bit", (val, key) => {
+    if (typeof val !== "object") {
+      throw new ValidationError(`$bit.${key} must be an object, got ${typeof val}`);
+    }
+    if (Array.isArray(val)) throw new ValidationError(`$bit.${key} cannot be an array`);
+
+    const hasAnd = "and" in val;
+    const hasOr = "or" in val;
+    const hasXor = "xor" in val;
+
+    const validOperatorCount = [hasAnd, hasOr, hasXor].filter(Boolean).length;
+    if (validOperatorCount !== 1) {
+      throw new ValidationError(
+        `$bit.${key} must have exactly one of "and", "or", or "xor" operators`,
+      );
+    }
+    const operatorVal = val.and ?? val.or ?? val.xor;
+    if (typeof operatorVal !== "number" || !Number.isInteger(operatorVal)) {
+      throw new ValidationError(
+        `$bit.${key} operator value must be an integer, got ${typeof operatorVal}`,
+      );
+    }
+  });
+
+  return parsedUpdateRecord;
 }
 
 /**
@@ -105,124 +227,483 @@ export class MongsterSchema<
     return out as $T;
   }
 
-  parseForUpdate(updateObj: MongsterUpdateFilter<$T>) {
-    Object.keys(updateObj).forEach((key) => {
-      if (!updateKeysArray.includes(key as any)) throw new Error("Invalid update key");
-    });
-
-    const parsedUpdateRecord: MongsterUpdateFilter<$T> = {};
-
-    if (this.options.withTimestamps) {
-      parsedUpdateRecord.$set = {};
+  // Override base parseForUpdate with specialized signature for update operations
+  parseForUpdate(updateObj: MongsterUpdateFilter<$T>, isUpsert?: boolean): MongsterUpdateFilter<$T>;
+  parseForUpdate(v: unknown): $T | undefined;
+  parseForUpdate(updateObj: unknown, isUpsert?: boolean): any {
+    // If called with update filter object
+    if (typeof updateObj === "object" && updateObj !== null && !Array.isArray(updateObj)) {
+      const hasUpdateOperator = Object.keys(updateObj).some((k) => k.startsWith("$"));
+      if (hasUpdateOperator) {
+        return this.#parseUpdateObject(updateObj as MongsterUpdateFilter<$T>, isUpsert);
+      }
     }
 
-    const processOperator = <K extends keyof MongsterUpdateFilter<$T>>(
-      operator: K,
-      validator?: (val: any, key: string) => void,
-    ) => {
-      const operatorValue = updateObj[operator];
-      if (typeof operatorValue === "undefined") return;
-      if (typeof operatorValue !== "object")
-        throw new Error(`${String(operator)} must be an object`);
-      if (Array.isArray(operatorValue)) throw new Error(`${String(operator)} cannot be an array`);
+    // Otherwise, treat as regular parse for update (partial validation)
+    if (updateObj === undefined) return undefined;
 
-      let result: any;
-      const keys = Object.keys(operatorValue);
-      if (keys.length) {
-        for (const key of keys) {
-          const val = (operatorValue as any)[key];
-          if (typeof val === "undefined") continue;
+    if (typeof updateObj !== "object" || updateObj === null) throw new MError("Expected an object");
+    if (Array.isArray(updateObj)) throw new MError("Expected an object, but received an array");
 
-          if (validator) validator(val, key);
+    const out: Record<string, unknown> = {};
+    for (const [k, s] of Object.entries(this.#shape)) {
+      try {
+        const parsed = s.parseForUpdate((updateObj as any)[k]);
+        // Only include defined values
+        if (parsed !== undefined) {
+          out[k] = parsed;
+        }
+      } catch (err) {
+        throw new MError(`${k}: ${(err as MError).message}`, {
+          cause: err,
+        });
+      }
+    }
 
-          if (typeof result !== "undefined") result[key] = val;
-          else result = { [key]: val };
+    return out as $T;
+  }
+
+  #parseUpdateObject(
+    updateObj: MongsterUpdateFilter<$T>,
+    isUpsert?: boolean,
+  ): MongsterUpdateFilter<$T> {
+    Object.keys(updateObj).forEach((key) => {
+      if (!updateKeysArray.includes(key as any)) throw new ValidationError("Invalid update key");
+    });
+
+    const processedUpdateRecord = processOperators(updateObj);
+    if (this.options.withTimestamps) {
+      const autoTimestampData: any = { updatedAt: true };
+      if (isUpsert) autoTimestampData.createdAt = true;
+      processedUpdateRecord.$currentDate = {
+        ...(processedUpdateRecord.$currentDate ?? {}),
+        ...autoTimestampData,
+      };
+    }
+
+    // Helper to resolve schema at path
+    const resolveSchemaAtPath = (
+      path: string,
+    ): { schema: MongsterSchemaInternal<any>; isOptional: boolean; isNullable: boolean } | null => {
+      const segments = path.split(".");
+      let currentSchema: MongsterSchemaInternal<any> | undefined;
+      let currentShape: Record<string, MongsterSchemaInternal<any>> = this.#shape;
+      let isOptional = false;
+      let isNullable = false;
+
+      for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i];
+        if (!segment) continue;
+
+        // Handle array index notation (e.g., "tags.0" or "users.0.name")
+        if (/^\d+$/.test(segment)) {
+          if (!currentSchema) return null;
+          const unwrapped = unwrapSchema(currentSchema);
+          if (!(unwrapped instanceof ArraySchema)) {
+            throw new ValidationError(
+              `Cannot use array index on non-array field at "${segments.slice(0, i).join(".")}"`,
+            );
+          }
+          currentSchema = unwrapped.getShapes();
+          continue;
+        }
+
+        currentSchema = currentShape[segment];
+        if (!currentSchema) {
+          throw new ValidationError(
+            `Field "${segments.slice(0, i + 1).join(".")}" does not exist in schema`,
+          );
+        }
+
+        // Track optional/nullable wrappers
+        if (currentSchema instanceof OptionalSchema) {
+          isOptional = true;
+          currentSchema = (currentSchema as any).inner;
+        }
+        if (currentSchema instanceof NullableSchema) {
+          isNullable = true;
+          currentSchema = (currentSchema as any).inner;
+        }
+
+        if (!currentSchema) {
+          throw new ValidationError(
+            `Field "${segments.slice(0, i + 1).join(".")}" is undefined after unwrapping`,
+          );
+        }
+
+        // Unwrap other wrappers
+        const unwrapped = unwrapSchema(currentSchema);
+
+        // If we have more segments, check if this is an object or array
+        if (i < segments.length - 1) {
+          if (unwrapped instanceof ObjectSchema) {
+            currentShape = unwrapped.getShape();
+          } else if (unwrapped instanceof ArraySchema) {
+            // Next segment should be either an index or we continue with array element schema
+            const nextSegment = segments[i + 1];
+            if (nextSegment && /^\d+$/.test(nextSegment)) {
+            } else {
+              // Treat as nested field in array element
+              currentSchema = unwrapped.getShapes();
+              const innerUnwrapped = unwrapSchema(currentSchema);
+              if (innerUnwrapped instanceof ObjectSchema) {
+                currentShape = innerUnwrapped.getShape();
+              } else {
+                throw new ValidationError(
+                  `Cannot access nested field on non-object array element at "${segments.slice(0, i + 1).join(".")}"`,
+                );
+              }
+            }
+          } else {
+            throw new ValidationError(
+              `Cannot access nested field "${segments[i + 1]}" on non-object field at "${segments.slice(0, i + 1).join(".")}"`,
+            );
+          }
         }
       }
 
-      if (result && Object.keys(result).length) {
-        parsedUpdateRecord[operator] = result;
-      }
+      if (!currentSchema) return null;
+      return { schema: currentSchema, isOptional, isNullable };
     };
 
-    processOperator("$currentDate", (val, key) => {
-      if (typeof val !== "boolean" && typeof val !== "object")
-        throw new Error(`$currentDate.${key} must be a boolean or object with $type`);
-      if (typeof val === "object") {
-        if (Array.isArray(val)) throw new Error(`$currentDate.${key} cannot be an array`);
-        if (val.$type !== "date" && val.$type !== "timestamp")
-          throw new Error(
-            `$currentDate.${key}.$type must be "date" or "timestamp", got "${val.$type}"`,
-          );
-      }
-    });
+    // Validate $set
+    if (typeof processedUpdateRecord.$set !== "undefined") {
+      Object.entries(processedUpdateRecord.$set).forEach(([path, value]) => {
+        const resolved = resolveSchemaAtPath(path);
+        if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
 
-    processOperator("$inc", (val, key) => {
-      if (typeof val !== "number")
-        throw new Error(`$inc.${key} must be a number, got ${typeof val}`);
-    });
+        const { schema, isNullable } = resolved;
 
-    processOperator("$min");
+        // Disallow undefined (should use $unset instead)
+        if (value === undefined) {
+          throw new ValidationError(`Cannot set "${path}" to undefined, use $unset instead`);
+        }
 
-    processOperator("$max");
+        // Allow null only if schema is nullable
+        if (value === null && !isNullable) {
+          throw new ValidationError(`Field "${path}" is not nullable`);
+        }
 
-    processOperator("$mul", (val, key) => {
-      if (typeof val !== "number")
-        throw new Error(`$mul.${key} must be a number, got ${typeof val}`);
-    });
-
-    processOperator("$rename", (val, key) => {
-      if (typeof val !== "string")
-        throw new Error(`$rename.${key} must be a string, got ${typeof val}`);
-    });
-
-    processOperator("$set");
-
-    processOperator("$setOnInsert");
-
-    processOperator("$unset", (val, key) => {
-      if (val !== "" && val !== 1 && val !== true)
-        throw new Error(`$unset.${key} must be "", 1, or true, got ${JSON.stringify(val)}`);
-    });
-
-    processOperator("$addToSet");
-
-    processOperator("$pop", (val, key) => {
-      if (val !== -1 && val !== 1) throw new Error(`$pop.${key} must be -1 or 1, got ${val}`);
-    });
-
-    processOperator("$pull");
-
-    processOperator("$push");
-
-    processOperator("$pullAll", (val, key) => {
-      if (!Array.isArray(val))
-        throw new Error(`$pullAll.${key} must be an array, got ${typeof val}`);
-    });
-
-    processOperator("$bit", (val, key) => {
-      if (typeof val !== "object")
-        throw new Error(`$bit.${key} must be an object, got ${typeof val}`);
-      if (Array.isArray(val)) throw new Error(`$bit.${key} cannot be an array`);
-      const hasAnd = "and" in val;
-      const hasOr = "or" in val;
-      const hasXor = "xor" in val;
-      const validOperatorCount = [hasAnd, hasOr, hasXor].filter(Boolean).length;
-      if (validOperatorCount !== 1)
-        throw new Error(`$bit.${key} must have exactly one of "and", "or", or "xor" operators`);
-      const operatorVal = val.and ?? val.or ?? val.xor;
-      if (typeof operatorVal !== "number" || !Number.isInteger(operatorVal))
-        throw new Error(`$bit.${key} operator value must be an integer, got ${typeof operatorVal}`);
-    });
-
-    if (this.options.withTimestamps) {
-      parsedUpdateRecord.$currentDate = {
-        ...(parsedUpdateRecord.$currentDate ?? {}),
-        updatedAt: true,
-      } as any;
+        // Validate value against schema - use parseForUpdate
+        if (value !== null) {
+          try {
+            schema.parseForUpdate(value);
+          } catch (err) {
+            throw new ValidationError(`$set.${path}: ${(err as MError).message}`);
+          }
+        }
+      });
     }
 
-    return parsedUpdateRecord;
+    // Validate $setOnInsert (same as $set)
+    if (typeof processedUpdateRecord.$setOnInsert !== "undefined") {
+      Object.entries(processedUpdateRecord.$setOnInsert).forEach(([path, value]) => {
+        const resolved = resolveSchemaAtPath(path);
+        if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
+
+        const { schema, isNullable } = resolved;
+
+        if (value === undefined) {
+          throw new ValidationError(`Cannot set "${path}" to undefined in $setOnInsert`);
+        }
+
+        if (value === null && !isNullable) {
+          throw new ValidationError(`Field "${path}" is not nullable`);
+        }
+
+        if (value !== null) {
+          try {
+            schema.parseForUpdate(value);
+          } catch (err) {
+            throw new ValidationError(`$setOnInsert.${path}: ${(err as MError).message}`);
+          }
+        }
+      });
+    }
+
+    // Validate $inc
+    if (typeof processedUpdateRecord.$inc !== "undefined") {
+      Object.entries(processedUpdateRecord.$inc).forEach(([path, value]) => {
+        const resolved = resolveSchemaAtPath(path);
+        if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
+
+        const unwrapped = unwrapSchema(resolved.schema);
+        if (!(unwrapped instanceof NumberSchema)) {
+          throw new ValidationError(
+            `$inc can only be used on number fields, but "${path}" is not a number`,
+          );
+        }
+
+        // Validate the increment value would not violate constraints
+        // Note: We can't fully validate min/max without current value, but we validate type
+        if (typeof value !== "number") {
+          throw new ValidationError(`$inc.${path} must be a number, got ${typeof value}`);
+        }
+      });
+    }
+
+    // Validate $mul
+    if (typeof processedUpdateRecord.$mul !== "undefined") {
+      Object.entries(processedUpdateRecord.$mul).forEach(([path, value]) => {
+        const resolved = resolveSchemaAtPath(path);
+        if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
+
+        const unwrapped = unwrapSchema(resolved.schema);
+        if (!(unwrapped instanceof NumberSchema)) {
+          throw new ValidationError(
+            `$mul can only be used on number fields, but "${path}" is not a number`,
+          );
+        }
+
+        if (typeof value !== "number") {
+          throw new ValidationError(`$mul.${path} must be a number, got ${typeof value}`);
+        }
+      });
+    }
+
+    // Validate $min
+    if (typeof processedUpdateRecord.$min !== "undefined") {
+      Object.entries(processedUpdateRecord.$min).forEach(([path, value]) => {
+        const resolved = resolveSchemaAtPath(path);
+        if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
+
+        // Validate value matches field type - use parseForUpdate
+        try {
+          resolved.schema.parseForUpdate(value);
+        } catch (err) {
+          throw new ValidationError(`$min.${path}: ${(err as MError).message}`);
+        }
+      });
+    }
+
+    // Validate $max
+    if (typeof processedUpdateRecord.$max !== "undefined") {
+      Object.entries(processedUpdateRecord.$max).forEach(([path, value]) => {
+        const resolved = resolveSchemaAtPath(path);
+        if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
+
+        // Validate value matches field type - use parseForUpdate
+        try {
+          resolved.schema.parseForUpdate(value);
+        } catch (err) {
+          throw new ValidationError(`$max.${path}: ${(err as MError).message}`);
+        }
+      });
+    }
+
+    // Validate $unset
+    if (typeof processedUpdateRecord.$unset !== "undefined") {
+      Object.entries(processedUpdateRecord.$unset).forEach(([path, _value]) => {
+        const resolved = resolveSchemaAtPath(path);
+        if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
+
+        // Can only unset optional fields
+        if (!resolved.isOptional && !resolved.isNullable) {
+          throw new ValidationError(`Cannot unset required field "${path}"`);
+        }
+      });
+    }
+
+    // Validate $currentDate
+    if (typeof processedUpdateRecord.$currentDate !== "undefined") {
+      Object.entries(processedUpdateRecord.$currentDate).forEach(([path, _value]) => {
+        // Skip auto-added timestamp fields
+        if (this.options.withTimestamps && (path === "updatedAt" || path === "createdAt")) {
+          return;
+        }
+
+        const resolved = resolveSchemaAtPath(path);
+        if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
+
+        const unwrapped = unwrapSchema(resolved.schema);
+        if (!(unwrapped instanceof DateSchema)) {
+          throw new ValidationError(
+            `$currentDate can only be used on date fields, but "${path}" is not a date`,
+          );
+        }
+      });
+    }
+
+    // Validate $push
+    if (typeof processedUpdateRecord.$push !== "undefined") {
+      Object.entries(processedUpdateRecord.$push).forEach(([path, value]) => {
+        const resolved = resolveSchemaAtPath(path);
+        if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
+
+        const unwrapped = unwrapSchema(resolved.schema);
+        if (!(unwrapped instanceof ArraySchema)) {
+          throw new ValidationError(
+            `$push can only be used on array fields, but "${path}" is not an array`,
+          );
+        }
+
+        const elementSchema = unwrapped.getShapes();
+
+        // Handle $each modifier
+        if (typeof value === "object" && value !== null && "$each" in value) {
+          const eachValue = (value as any).$each;
+          if (!Array.isArray(eachValue)) {
+            throw new ValidationError(`$push.${path}.$each must be an array`);
+          }
+          eachValue.forEach((item: any, idx: number) => {
+            try {
+              elementSchema.parseForUpdate(item);
+            } catch (err) {
+              throw new ValidationError(`$push.${path}.$each[${idx}]: ${(err as MError).message}`);
+            }
+          });
+        } else {
+          // Single value push
+          try {
+            elementSchema.parseForUpdate(value);
+          } catch (err) {
+            throw new ValidationError(`$push.${path}: ${(err as MError).message}`);
+          }
+        }
+      });
+    }
+
+    // Validate $addToSet
+    if (typeof processedUpdateRecord.$addToSet !== "undefined") {
+      Object.entries(processedUpdateRecord.$addToSet).forEach(([path, value]) => {
+        const resolved = resolveSchemaAtPath(path);
+        if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
+
+        const unwrapped = unwrapSchema(resolved.schema);
+        if (!(unwrapped instanceof ArraySchema)) {
+          throw new ValidationError(
+            `$addToSet can only be used on array fields, but "${path}" is not an array`,
+          );
+        }
+
+        const elementSchema = unwrapped.getShapes();
+
+        // Handle $each modifier
+        if (typeof value === "object" && value !== null && "$each" in value) {
+          const eachValue = (value as any).$each;
+          if (!Array.isArray(eachValue)) {
+            throw new ValidationError(`$addToSet.${path}.$each must be an array`);
+          }
+          eachValue.forEach((item: any, idx: number) => {
+            try {
+              elementSchema.parseForUpdate(item);
+            } catch (err) {
+              throw new ValidationError(
+                `$addToSet.${path}.$each[${idx}]: ${(err as MError).message}`,
+              );
+            }
+          });
+        } else {
+          // Single value
+          try {
+            elementSchema.parseForUpdate(value);
+          } catch (err) {
+            throw new ValidationError(`$addToSet.${path}: ${(err as MError).message}`);
+          }
+        }
+      });
+    }
+
+    // Validate $pull
+    if (typeof processedUpdateRecord.$pull !== "undefined") {
+      Object.entries(processedUpdateRecord.$pull).forEach(([path, value]) => {
+        const resolved = resolveSchemaAtPath(path);
+        if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
+
+        const unwrapped = unwrapSchema(resolved.schema);
+        if (!(unwrapped instanceof ArraySchema)) {
+          throw new ValidationError(
+            `$pull can only be used on array fields, but "${path}" is not an array`,
+          );
+        }
+
+        const elementSchema = unwrapped.getShapes();
+
+        // $pull can be a value or a query condition
+        // For simplicity, validate if it's not an object (query), otherwise it's a simple value
+        if (typeof value !== "object" || value === null) {
+          try {
+            elementSchema.parseForUpdate(value);
+          } catch (err) {
+            throw new ValidationError(`$pull.${path}: ${(err as MError).message}`);
+          }
+        }
+        // For query objects, we'd need more complex validation - skip for now
+      });
+    }
+
+    // Validate $pullAll
+    if (typeof processedUpdateRecord.$pullAll !== "undefined") {
+      Object.entries(processedUpdateRecord.$pullAll).forEach(([path, values]) => {
+        const resolved = resolveSchemaAtPath(path);
+        if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
+
+        const unwrapped = unwrapSchema(resolved.schema);
+        if (!(unwrapped instanceof ArraySchema)) {
+          throw new ValidationError(
+            `$pullAll can only be used on array fields, but "${path}" is not an array`,
+          );
+        }
+
+        const elementSchema = unwrapped.getShapes();
+
+        if (!Array.isArray(values)) {
+          throw new ValidationError(`$pullAll.${path} must be an array`);
+        }
+
+        values.forEach((item: any, idx: number) => {
+          try {
+            elementSchema.parseForUpdate(item);
+          } catch (err) {
+            throw new ValidationError(`$pullAll.${path}[${idx}]: ${(err as MError).message}`);
+          }
+        });
+      });
+    }
+
+    // Validate $pop
+    if (typeof processedUpdateRecord.$pop !== "undefined") {
+      Object.entries(processedUpdateRecord.$pop).forEach(([path, _value]) => {
+        const resolved = resolveSchemaAtPath(path);
+        if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
+
+        const unwrapped = unwrapSchema(resolved.schema);
+        if (!(unwrapped instanceof ArraySchema)) {
+          throw new ValidationError(
+            `$pop can only be used on array fields, but "${path}" is not an array`,
+          );
+        }
+      });
+    }
+
+    // Validate $rename
+    if (typeof processedUpdateRecord.$rename !== "undefined") {
+      Object.entries(processedUpdateRecord.$rename).forEach(([sourcePath, targetPath]) => {
+        if (typeof targetPath !== "string") {
+          throw new ValidationError(`$rename.${sourcePath} must be a string`);
+        }
+
+        const sourceResolved = resolveSchemaAtPath(sourcePath);
+        if (!sourceResolved)
+          throw new ValidationError(`Source field "${sourcePath}" does not exist in schema`);
+
+        const targetResolved = resolveSchemaAtPath(targetPath);
+        if (!targetResolved)
+          throw new ValidationError(`Target field "${targetPath}" does not exist in schema`);
+
+        // Check type compatibility - compare constructor names
+        const sourceUnwrapped = unwrapSchema(sourceResolved.schema);
+        const targetUnwrapped = unwrapSchema(targetResolved.schema);
+
+        if (sourceUnwrapped.constructor.name !== targetUnwrapped.constructor.name) {
+          throw new ValidationError(
+            `Cannot rename "${sourcePath}" to "${targetPath}": incompatible types`,
+          );
+        }
+      });
+    }
+
+    return processedUpdateRecord;
   }
 
   /**

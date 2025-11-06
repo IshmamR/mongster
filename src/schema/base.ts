@@ -8,6 +8,14 @@ export abstract class MongsterSchemaBase<T, I = T & any> {
 
   abstract clone(): this;
   abstract parse(v: unknown): T;
+
+  /**
+   * Parse value for update operations
+   * - Undefined values are allowed and returned as-is (caller will filter)
+   * - Validation is applied only to defined values
+   * - No required field checks
+   */
+  abstract parseForUpdate(v: unknown): T | undefined;
 }
 
 export abstract class MongsterSchemaInternal<T, I = T & any> extends MongsterSchemaBase<T, I> {
@@ -130,6 +138,15 @@ class CustomValidationSchema<T> extends MongsterSchemaInternal<T, T> {
     if (!validated) throw new MError(this.#msg ?? `Custom validation failed`);
     return parsed;
   }
+
+  parseForUpdate(v: unknown): T | undefined {
+    if (v === undefined) return undefined;
+    const parsed = this.inner.parseForUpdate(v);
+    if (parsed === undefined) return undefined;
+    const validated = this.#validator(parsed);
+    if (!validated) throw new MError(this.#msg ?? `Custom validation failed`);
+    return parsed;
+  }
 }
 
 export class WithDefaultSchema<T> extends MongsterSchemaInternal<T, T | undefined> {
@@ -150,6 +167,11 @@ export class WithDefaultSchema<T> extends MongsterSchemaInternal<T, T | undefine
 
   parse(v: unknown): T {
     return this.inner.parse(v);
+  }
+
+  parseForUpdate(v: unknown): T | undefined {
+    if (v === undefined) return undefined;
+    return this.inner.parseForUpdate(v);
   }
 }
 
@@ -172,6 +194,10 @@ export class OptionalSchema<T> extends MongsterSchemaInternal<T | undefined, T |
   parse(v: unknown): T | undefined {
     return v === undefined ? undefined : this.inner.parse(v);
   }
+
+  parseForUpdate(v: unknown): T | undefined {
+    return v === undefined ? undefined : this.inner.parseForUpdate(v);
+  }
 }
 
 export class NullableSchema<T> extends MongsterSchemaInternal<T | null, T | null> {
@@ -192,6 +218,11 @@ export class NullableSchema<T> extends MongsterSchemaInternal<T | null, T | null
 
   parse(v: unknown): T | null {
     return v === null ? null : this.inner.parse(v);
+  }
+
+  parseForUpdate(v: unknown): T | null | undefined {
+    if (v === undefined) return undefined;
+    return v === null ? null : this.inner.parseForUpdate(v);
   }
 }
 
@@ -264,6 +295,33 @@ export class ArraySchema<T, I> extends MongsterSchemaInternal<T[], I[]> {
     return v.map((x, i) => {
       try {
         return this.#shapes.parse(x);
+      } catch (err) {
+        throw new MError(`[${i}] ${(err as Error).message}`, {
+          cause: err,
+        });
+      }
+    });
+  }
+
+  parseForUpdate(v: unknown): T[] | undefined {
+    if (v === undefined) return undefined;
+
+    if (!Array.isArray(v)) throw new MError("Expected an array");
+
+    const arrLength = v.length;
+    if (typeof this.#checks.min !== "undefined" && arrLength < this.#checks.min) {
+      throw new MError(`Array length must be greater than or equal to ${this.#checks.min}`);
+    }
+    if (typeof this.#checks.max !== "undefined" && arrLength > this.#checks.max) {
+      throw new MError(`Array length must be less than or equal to ${this.#checks.max}`);
+    }
+
+    return v.map((x, i) => {
+      try {
+        const parsed = this.#shapes.parseForUpdate(x);
+        // For arrays, we don't skip undefined elements - they should be validated
+        if (parsed === undefined) return this.#shapes.parse(x);
+        return parsed;
       } catch (err) {
         throw new MError(`[${i}] ${(err as Error).message}`, {
           cause: err,

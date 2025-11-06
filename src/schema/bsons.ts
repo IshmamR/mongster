@@ -48,6 +48,11 @@ export class ObjectIdSchema extends MongsterSchemaInternal<ObjectId, ObjectId> {
     if (!(v instanceof ObjectId)) throw new MError(`Expected an ObjectId`);
     return v;
   }
+
+  parseForUpdate(v: unknown): ObjectId | undefined {
+    if (v === undefined) return undefined;
+    return this.parse(v);
+  }
 }
 
 interface Decimal128Checks {
@@ -92,6 +97,11 @@ export class Decimal128Schema extends MongsterSchemaInternal<Decimal128, Decimal
 
     if (!(v instanceof Decimal128)) throw new MError("Expected a Decimal128");
     return v;
+  }
+
+  parseForUpdate(v: unknown): Decimal128 | undefined {
+    if (v === undefined) return undefined;
+    return this.parse(v);
   }
 }
 
@@ -199,6 +209,11 @@ export class BinarySchema extends MongsterSchemaInternal<Binary, Binary> {
     }
 
     return new Binary(buf, this.#checks.subType);
+  }
+
+  parseForUpdate(v: unknown): Binary | undefined {
+    if (v === undefined) return undefined;
+    return this.parse(v);
   }
 
   getJsonSchema(): any {
