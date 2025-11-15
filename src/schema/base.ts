@@ -116,7 +116,7 @@ class CustomValidationSchema<T> extends MongsterSchemaInternal<T, T> {
   declare $input: T;
 
   // @internal used internally
-  protected inner: MongsterSchemaInternal<T>;
+  inner: MongsterSchemaInternal<T>;
 
   #validator: ValidatorFunc<T>;
   #msg?: string;
@@ -154,7 +154,7 @@ export class WithDefaultSchema<T> extends MongsterSchemaInternal<T, T | undefine
   declare $input: T | undefined;
 
   // @internal used internally
-  protected inner: MongsterSchemaInternal<T>;
+  inner: MongsterSchemaInternal<T>;
 
   constructor(inner: MongsterSchemaInternal<T>) {
     super();
@@ -180,7 +180,7 @@ export class OptionalSchema<T> extends MongsterSchemaInternal<T | undefined, T |
   declare $input: T | undefined;
 
   // @internal used internally
-  protected inner: MongsterSchemaInternal<T>;
+  inner: MongsterSchemaInternal<T>;
 
   constructor(inner: MongsterSchemaInternal<T>) {
     super();
@@ -205,7 +205,7 @@ export class NullableSchema<T> extends MongsterSchemaInternal<T | null, T | null
   declare $input: T | null;
 
   // @internal used internally
-  protected inner: MongsterSchemaInternal<T>;
+  inner: MongsterSchemaInternal<T>;
 
   constructor(inner: MongsterSchemaInternal<T>) {
     super();

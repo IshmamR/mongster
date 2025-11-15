@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "mongster",
@@ -11,10 +12,7 @@
         "@types/bun": "latest",
         "mongodb-memory-server": "^10.2.3",
         "prettier": "^3.6.2",
-        "typescript": "^5.5.0",
-      },
-      "peerDependencies": {
-        "typescript": "^5",
+        "typescript": "^5.9.3",
       },
     },
   },
