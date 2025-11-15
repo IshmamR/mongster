@@ -13,6 +13,7 @@ interface NumberChecks<N> {
 export class NumberSchema<TP extends number = number> extends MongsterSchemaInternal<TP, TP> {
   declare $type: TP;
   declare $input: TP;
+  declare $brand: "NumberSchema";
 
   #checks: NumberChecks<TP>;
 
@@ -99,6 +100,7 @@ interface StringChecks<S> {
 export class StringSchema<TP extends string = string> extends MongsterSchemaInternal<TP, TP> {
   declare $type: TP;
   declare $input: TP;
+  declare $brand: "StringSchema";
 
   #checks: StringChecks<TP>;
 
@@ -190,6 +192,7 @@ interface BooleanChecks {
 export class BooleanSchema extends MongsterSchemaInternal<boolean, boolean> {
   declare $type: boolean;
   declare $input: boolean;
+  declare $brand: "BooleanSchema";
 
   #checks: BooleanChecks;
 
@@ -248,6 +251,7 @@ interface DateChecks {
 export class DateSchema extends MongsterSchemaInternal<Date, Date> {
   declare $type: Date;
   declare $input: Date;
+  declare $brand: "DateSchema";
 
   #checks: DateChecks;
 

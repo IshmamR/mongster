@@ -44,6 +44,7 @@ type RequiredInputs<T extends Record<string, MongsterSchemaBase<any>>> = {
     ? never
     : K]: T[K]["$input"];
 };
+
 type DefaultInputs<T extends Record<string, MongsterSchemaBase<any>>> = {
   [K in keyof T as T[K] extends WithDefaultSchema<any> ? K : never]?: T[K]["$input"];
 };

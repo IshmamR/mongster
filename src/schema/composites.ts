@@ -26,6 +26,7 @@ export class ObjectSchema<
 > extends MongsterSchemaInternal<$T, $I> {
   declare $type: $T;
   declare $input: $I;
+  declare $brand: "ObjectSchema";
 
   protected rootIndexes: IndexDescription[] = [];
   protected options: MongsterSchemaOptions = {};
@@ -152,6 +153,7 @@ export class UnionSchema<
 > extends MongsterSchemaInternal<$T, $I> {
   declare $type: $T;
   declare $input: $I;
+  declare $brand: "UnionSchema";
 
   #shapes: T;
   #checks: UnionChecks<$T>;
@@ -250,6 +252,7 @@ export class TupleSchema<
 > extends MongsterSchemaInternal<$T, $I> {
   declare $type: $T;
   declare $input: $I;
+  declare $brand: "TupleSchema";
 
   #shapes: T;
   #checks: TupleChecks<$T>;
