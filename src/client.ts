@@ -1,6 +1,7 @@
 import { type Db, MongoClient, type MongoClientOptions } from "mongodb";
 import { MongsterModel } from "./collection";
 import type { MongsterSchema } from "./schema/schema";
+import { createTransactionManager, type MongsterTransaction } from "./transaction";
 
 interface MongsterClientOptions extends MongoClientOptions {
   retryConnection?: number;
@@ -18,9 +19,16 @@ export class MongsterClient {
   #schemas = new Map<string, MongsterSchema<any>>();
   #models = new Map<string, MongsterModel<any, any, any, any>>();
 
+  /** Transaction API - automatically handles session management */
+  public readonly transaction: MongsterTransaction;
+
   constructor(uri?: string, options?: MongsterClientOptions) {
     this.#uri = uri;
     this.#options = { ...this.#options, ...options };
+
+    // Initialize transaction API
+    const { transaction } = createTransactionManager(this);
+    this.transaction = transaction;
   }
 
   model<CN extends string, SC extends MongsterSchema<any, any>>(collectionName: CN, schema: SC) {

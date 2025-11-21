@@ -5,6 +5,11 @@ import type { MongsterSchema } from "./schema/schema";
 import type { InferSchemaInputType, InferSchemaType } from "./types/types.schema";
 
 export { MError } from "./error";
+export type {
+  MongsterTransaction,
+  MongsterTransactionContext,
+  MongsterTransactionModel,
+} from "./transaction";
 
 export const M = new MongsterSchemaBuilder();
 export const defineSchema = M.schema;
