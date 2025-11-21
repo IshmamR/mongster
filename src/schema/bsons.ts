@@ -10,6 +10,7 @@ interface ObjectIdChecks {
 export class ObjectIdSchema extends MongsterSchemaInternal<ObjectId, ObjectId> {
   declare $type: ObjectId;
   declare $input: ObjectId;
+  declare $brand: "ObjectIdSchema";
 
   #checks: ObjectIdChecks;
 
@@ -63,6 +64,7 @@ interface Decimal128Checks {
 export class Decimal128Schema extends MongsterSchemaInternal<Decimal128, Decimal128> {
   declare $type: Decimal128;
   declare $input: Decimal128;
+  declare $brand: "Decimal128Schema";
 
   #checks: Decimal128Checks;
 
@@ -135,6 +137,7 @@ interface BinaryChecks {
 export class BinarySchema extends MongsterSchemaInternal<Binary, Binary> {
   declare $type: Binary;
   declare $input: Binary;
+  declare $brand: "BinarySchema";
 
   #checks: BinaryChecks;
 

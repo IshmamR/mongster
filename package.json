@@ -1,6 +1,6 @@
 {
   "name": "mongster",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,13 +18,13 @@
   },
   "description": "A better MongoDB ODM",
   "scripts": {
-    "test": "bun test",
     "build:js": "bun run ./scripts/build.ts",
     "build:ts": "tsc -p tsconfig.build.json",
     "build": "bun run build:js && bun run build:ts",
     "clean": "rm -rf dist",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "prepublishOnly": "bun run clean && bun run build"
+    "test": "bun run tsc -p tsconfig.test.json && bun test",
+    "prepublishOnly": "bun run clean && bun run test && bun run build"
   },
   "keywords": [
     "mongodb",

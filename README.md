@@ -1,442 +1,458 @@
-# mongster
+# Mongster
 
-TypeScript-first, schema-based ODM for MongoDB with strong type inference and automatic index management.
-
-**Status**: Pre-alpha (v0.0.11). Core features implemented, API may evolve.
+A type-safe MongoDB ODM (Object Document Mapper) for TypeScript with schema validation, automatic index management, and intuitive query building.
 
 ## Features
 
-- 🎯 **Full Type Safety** – Complete TypeScript inference from schema to query results
-- 🔧 **Rich Schema Builder** – Chainable API for defining schemas with validation
-- 📇 **Automatic Index Management** – Declare indexes in schema, sync automatically
-- 🔍 **Type-Safe Queries** – MongoDB queries with full autocomplete and type checking
-- 🎨 **Flexible API** – Use global client or create multiple instances
-- ⚡ **Modern Stack** – Built with Bun, works with Node.js
+- 🔒 **Fully Type-Safe** - End-to-end TypeScript support with complete type inference
+- 📝 **Schema Validation** - Runtime validation with automatic TypeScript type generation
+- 🔍 **Index Management** - Automatic index synchronization with MongoDB
+- 🎯 **Query Builder** - Fluent, type-safe query API with projection and filtering
+- ⚡ **Optimized Performance** - Built with Bun, compatible with Node.js 18+
+- 🔄 **Timestamps** - Automatic `createdAt` and `updatedAt` field management
+- 🛡️ **Error Handling** - Comprehensive error types for better debugging
 
-## Install
+## Installation
 
 ```bash
+npm install mongster
+# or
 bun add mongster
 # or
-npm install mongster
+yarn add mongster
+# or
+pnpm add mongster
 ```
-
-**Requirements**:
-- TypeScript ^5
-- Node.js >= 18 or Bun >= 1.0
 
 ## Quick Start
 
-```ts
-import { M, MongsterClient } from 'mongster';
+```typescript
+import { M, mongster, model } from "mongster";
 
-// Create and connect client
-const client = new MongsterClient();
-await client.connect(process.env.MONGO_URI!, { dbName: "myapp" });
-
-// Define schema with the M schema builder
+// Define your schema
 const userSchema = M.schema({
   name: M.string(),
-  email: M.string().uniqueIndex(),
+  email: M.string(),
   age: M.number().min(0).max(120),
-  isActive: M.boolean().default(true),
-  tags: M.array(M.string()),
-  profile: M.object({
-    bio: M.string().optional(),
-    avatar: M.string().optional(),
+  address: M.object({
+    street: M.string(),
+    city: M.string(),
+    zip: M.number()
   }).optional(),
-}).withTimestamps(); // adds createdAt, updatedAt
+  tags: M.array(M.string()).optional()
+}).withTimestamps();
 
-// Create model
-const User = client.model("users", userSchema);
+// Create a model
+const User = model("users", userSchema);
 
-// Type-safe operations
-const user = await User.create({
-  name: "Alice",
-  email: "alice@example.com",
-  age: 28,
-  tags: ["developer", "designer"],
+// Connect to MongoDB
+await mongster.connect("mongodb://localhost:27017/mydb");
+
+// Create documents
+const user = await User.createOne({
+  name: "John Doe",
+  email: "john@example.com",
+  age: 30
 });
 
-// Queries with full type safety
-const users = await User.find({ 
-  age: { $gte: 18 },
-  isActive: true 
-});
-
-// Update operations
-await User.updateOne(
-  { email: "alice@example.com" },
-  { $set: { age: 29 } }
-);
+// Query documents
+const users = await User.find({ age: { $gte: 18 } })
+  .include(["name", "email"])
+  .limit(10);
 ```
 
 ## Schema Definition
 
-### Schema Builder (`M`)
+### Basic Types
 
-The `M` schema builder provides a chainable API for defining schemas:
-
-```ts
-import { M } from 'mongster';
+```typescript
+import { M } from "mongster";
 
 const schema = M.schema({
   // Primitives
   name: M.string(),
   age: M.number(),
   active: M.boolean(),
-  createdAt: M.date(),
+  birthDate: M.date(),
   
-  // With validation
-  email: M.string()
-    .min(5)
-    .max(100)
-    .regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/),
+  // MongoDB Types
+  userId: M.objectId(),
+  data: M.binary(),
+  price: M.decimal128(),
   
-  score: M.number()
-    .min(0)
-    .max(100),
+  // Optional fields
+  nickname: M.string().optional(),
   
-  status: M.string()
-    .enum(["pending", "active", "inactive"]),
+  // Default values
+  status: M.string().default("pending"),
+  createdAt: M.date().defaultFn(() => new Date()),
+});
+```
+
+### Validation
+
+```typescript
+const schema = M.schema({
+  // String validation
+  username: M.string().min(3).max(20),
+  email: M.string().match(/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/),
+  role: M.string().enum(["admin", "user", "guest"]),
   
-  // Arrays
-  tags: M.array(M.string()),
-  matrix: M.array(M.array(M.number())),
+  // Number validation
+  age: M.number().min(0).max(120),
+  score: M.number().enum([1, 2, 3, 4, 5]),
   
+  // Boolean
+  verified: M.boolean(),
+});
+```
+
+### Nested Objects and Arrays
+
+```typescript
+const schema = M.schema({
   // Nested objects
   address: M.object({
     street: M.string(),
     city: M.string(),
-    zipCode: M.number(),
+    coordinates: M.object({
+      lat: M.number(),
+      lng: M.number()
+    })
   }),
   
-  // Optional and nullable
-  bio: M.string().optional(),
-  middleName: M.string().nullable(),
-  nickname: M.string().optional().nullable(),
+  // Arrays
+  tags: M.array(M.string()),
+  scores: M.array(M.number()),
   
-  // Default values
-  role: M.string().default("user"),
-  createdAt: M.date().defaultFn(() => new Date()),
-  
-  // BSON types
-  userId: M.objectId(),
-  price: M.decimal(),
-  data: M.binary(),
+  // Array of objects
+  contacts: M.array(
+    M.object({
+      type: M.string(),
+      value: M.string()
+    })
+  ).optional(),
 });
-```
-
-### Indexes
-
-Declare indexes directly in your schema:
-
-```ts
-const userSchema = M.schema({
-  email: M.string().uniqueIndex(),      // unique index
-  username: M.string().index(),         // regular index
-  lastName: M.string().index(-1),       // descending index
-  bio: M.string().textIndex(),          // text index
-  tags: M.array(M.string()).hashedIndex(), // hashed index
-  
-  // Sparse and partial indexes
-  phone: M.string().sparseIndex(),
-  status: M.string().partialIndex({ status: { $eq: "active" } }),
-  
-  // TTL index (auto-delete after time)
-  expiresAt: M.date().ttl(3600), // 1 hour in seconds
-  
-  // Compound indexes (at schema level)
-}).createIndex(
-  { lastName: 1, firstName: 1 },
-  { unique: true }
-);
-
-// Indexes sync automatically on first operation
-// Or manually sync:
-await User.syncIndexes();
 ```
 
 ### Timestamps
 
-Add automatic `createdAt` and `updatedAt` fields:
-
-```ts
+```typescript
 const schema = M.schema({
   name: M.string(),
-}).withTimestamps();
-
-// Results in type:
-// { name: string; createdAt: Date; updatedAt: Date; }
+  email: M.string()
+}).withTimestamps(); // Adds createdAt and updatedAt
 ```
 
-## Models
+### Type Inference
 
-### Creating Models
+```typescript
+import type { M } from "mongster";
 
-```ts
-// Using client instance
-const client = new MongsterClient();
-const User = client.model("users", userSchema);
+const userSchema = M.schema({
+  name: M.string(),
+  age: M.number()
+});
 
-// Using global client
-import { mongster, model } from 'mongster';
-const User = model("users", userSchema);
+// Infer the output type (what you get from database)
+type User = M.infer<typeof userSchema>;
+// { name: string; age: number }
 
-// Multiple database instances
-const client1 = new MongsterClient();
-await client1.connect(URI1);
-const User1 = client1.model("users", schema);
+// Infer the input type (what you provide when creating)
+type UserInput = M.inferInput<typeof userSchema>;
+// { name: string; age: number }
+```
 
-const client2 = new MongsterClient();
-await client2.connect(URI2);
-const User2 = client2.model("users", schema);
+## Index Management
+
+Mongster automatically manages indexes for you, creating, updating, and optionally dropping indexes based on your schema definition.
+
+```typescript
+const schema = M.schema({
+  email: M.string().uniqueIndex(), // Unique index
+  username: M.string().index(1), // Ascending index
+  lastLogin: M.date().index(-1), // Descending index
+  content: M.string().textIndex(), // Text index for full-text search
+  location: M.string().hashedIndex(), // Hashed index
+  expiresAt: M.date().ttl(3600), // TTL index (expires after 1 hour)
+}).addIndex(
+  { email: 1, username: 1 }, // Compound index
+  { unique: true }
+);
+
+// Indexes are automatically synced when you connect
+await mongster.connect(uri, {
+  autoIndex: { syncOnConnect: true }
+});
+
+// Or manually sync indexes
+await User.syncIndexes();
 ```
 
 ## CRUD Operations
 
 ### Create
 
-```ts
-// Single document
-const user = await User.create({
+```typescript
+// Insert one document
+const result = await User.insertOne({
   name: "Alice",
   email: "alice@example.com",
-  age: 28,
+  age: 25
 });
 
-// Multiple documents
-const users = await User.createMany([
-  { name: "Bob", email: "bob@example.com", age: 30 },
-  { name: "Charlie", email: "charlie@example.com", age: 25 },
+// Create and return the document
+const user = await User.createOne({
+  name: "Bob",
+  email: "bob@example.com",
+  age: 30
+});
+
+// Insert multiple documents
+const results = await User.insertMany([
+  { name: "Charlie", email: "charlie@example.com", age: 28 },
+  { name: "Diana", email: "diana@example.com", age: 32 }
 ]);
 
-// With custom _id
-const user = await User.create({
-  _id: new ObjectId(),
-  name: "Dave",
-  email: "dave@example.com",
-});
+// Create multiple and return documents
+const users = await User.createMany([
+  { name: "Eve", email: "eve@example.com", age: 27 },
+  { name: "Frank", email: "frank@example.com", age: 35 }
+]);
 ```
 
 ### Read
 
-```ts
-// Find multiple
-const users = await User.find({ age: { $gte: 18 } });
-
-// Find one
+```typescript
+// Find one document
 const user = await User.findOne({ email: "alice@example.com" });
 
-// With sorting and pagination
-const users = await User.find({})
-  .sort({ age: -1 })
+// Find multiple documents
+const users = await User.find({ age: { $gte: 25 } });
+
+// Find with query builder
+const results = await User.find({ age: { $gte: 18 } })
+  .include(["name", "email"]) // Include specific fields
+  .exclude(["_id"]) // Exclude fields
+  .sort({ age: -1 }) // Sort descending by age
   .skip(10)
-  .limit(10);
+  .limit(20);
 
-// Count
-const count = await User.count({ isActive: true });
+// Find by ID
+const user = await User.findById(someObjectId);
 
-// Distinct
-const cities = await User.distinct("address.city");
+// Count documents
+const count = await User.countDocuments({ active: true });
 ```
 
 ### Update
 
-```ts
-// Update one
-await User.updateOne(
+```typescript
+// Update one document
+const result = await User.updateOne(
   { email: "alice@example.com" },
-  { $set: { age: 29 } }
+  { $set: { age: 26 } }
 );
 
-// Update many
-await User.updateMany(
-  { isActive: false },
-  { $set: { status: "archived" } }
+// Update multiple documents
+const result = await User.updateMany(
+  { age: { $lt: 18 } },
+  { $set: { status: "minor" } }
 );
 
-// With upsert
-await User.updateOne(
-  { email: "new@example.com" },
-  { $set: { name: "New User" } },
-  { upsert: true }
+// Find and update
+const updatedUser = await User.findOneAndUpdate(
+  { email: "bob@example.com" },
+  { $inc: { age: 1 } },
+  { returnDocument: "after" }
 );
 
-// Array operations
-await User.updateOne(
-  { _id: userId },
-  { $push: { tags: "new-tag" } }
-);
-
-await User.updateOne(
-  { _id: userId },
-  { $pull: { tags: "old-tag" } }
-);
-```
-
-### Replace
-
-```ts
-// Replace entire document (except _id)
-await User.replaceOne(
-  { email: "alice@example.com" },
-  { name: "Alice Smith", email: "alice@example.com", age: 30 }
+// Replace document
+const result = await User.replaceOne(
+  { _id: someId },
+  { name: "New Name", email: "new@example.com", age: 40 }
 );
 ```
 
 ### Delete
 
-```ts
-// Delete one
-await User.deleteOne({ email: "alice@example.com" });
+```typescript
+// Delete one document
+const result = await User.deleteOne({ email: "alice@example.com" });
 
-// Delete many
-await User.deleteMany({ isActive: false });
+// Delete multiple documents
+const result = await User.deleteMany({ age: { $lt: 18 } });
 
-// Delete all
-await User.deleteMany({});
-```
-
-## Query Building
-
-Type-safe query building with MongoDB operators:
-
-```ts
-// Comparison operators
-User.find({ age: { $eq: 25 } });
-User.find({ age: { $ne: 25 } });
-User.find({ age: { $gt: 18 } });
-User.find({ age: { $gte: 18 } });
-User.find({ age: { $lt: 65 } });
-User.find({ age: { $lte: 65 } });
-User.find({ age: { $in: [25, 30, 35] } });
-User.find({ age: { $nin: [18, 21] } });
-
-// Logical operators
-User.find({ 
-  $and: [
-    { age: { $gte: 18 } },
-    { isActive: true }
-  ]
-});
-
-User.find({
-  $or: [
-    { role: "admin" },
-    { role: "moderator" }
-  ]
-});
-
-// Nested fields (dot notation)
-User.find({ "address.city": "New York" });
-User.find({ "profile.bio": { $exists: true } });
-
-// Array queries
-User.find({ tags: "developer" }); // contains
-User.find({ tags: { $all: ["developer", "designer"] } });
-User.find({ tags: { $size: 3 } });
+// Find and delete
+const deletedUser = await User.findOneAndDelete({ email: "bob@example.com" });
 ```
 
 ## Connection Management
 
-```ts
-import { MongsterClient } from 'mongster';
+```typescript
+import { MongsterClient } from "mongster";
 
+// Using the default client
+import { mongster } from "mongster";
+await mongster.connect("mongodb://localhost:27017/mydb");
+
+// Create a custom client
 const client = new MongsterClient();
-
-// Connect
-await client.connect("mongodb://localhost:27017", {
-  dbName: "myapp",
-  // Optional: auto-sync indexes on connect
-  syncIndexesOnConnect: true,
+await client.connect("mongodb://localhost:27017/mydb", {
+  retryConnection: 3, // Retry connection 3 times
+  retryDelayMs: 500, // Wait 500ms between retries
+  autoIndex: { syncOnConnect: true }, // Sync indexes on connect
+  // ... other MongoDB client options
 });
 
-// Get database
-const db = client.getDb();
+// Check connection
+const isConnected = await client.ping();
 
 // Disconnect
 await client.disconnect();
 ```
 
-## Type Inference
+## Advanced Filtering
 
-Mongster provides full type inference:
+Mongster provides type-safe filtering with MongoDB query operators:
 
-```ts
-import { M } from 'mongster';
+```typescript
+// Comparison operators
+await User.find({ age: { $eq: 25 } });
+await User.find({ age: { $ne: 25 } });
+await User.find({ age: { $gt: 25 } });
+await User.find({ age: { $gte: 25 } });
+await User.find({ age: { $lt: 25 } });
+await User.find({ age: { $lte: 25 } });
+await User.find({ age: { $in: [25, 30, 35] } });
+await User.find({ age: { $nin: [25, 30] } });
 
-const userSchema = M.schema({
-  name: M.string(),
-  age: M.number().optional(),
-  tags: M.array(M.string()),
-});
+// Logical operators
+await User.find({ $and: [{ age: { $gte: 18 } }, { status: "active" }] });
+await User.find({ $or: [{ age: { $lt: 18 } }, { status: "inactive" }] });
+await User.find({ $not: { age: { $lt: 18 } } });
 
-// Infer output type (what you get from DB)
-type User = M.infer<typeof userSchema>;
-// { name: string; age?: number; tags: string[]; _id: ObjectId }
-
-// Infer input type (what you pass to create)
-type UserInput = M.inferInput<typeof userSchema>;
-// { name: string; age?: number; tags: string[] }
+// Array operators
+await User.find({ tags: { $all: ["javascript", "typescript"] } });
+await User.find({ tags: { $elemMatch: { $eq: "mongodb" } } });
+await User.find({ tags: { $size: 3 } });
 ```
 
-## Validation
+## Error Handling
 
-Schema validation happens automatically:
+```typescript
+import { MError } from "mongster";
 
-```ts
-const schema = M.schema({
-  age: M.number().min(0).max(120),
-  email: M.string().regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/),
-  status: M.string().enum(["active", "inactive"]),
-});
-
-// ✅ Valid
-await Model.create({ age: 25, email: "user@example.com", status: "active" });
-
-// ❌ Throws validation error
-await Model.create({ age: 150, email: "invalid", status: "unknown" });
+try {
+  const user = await User.createOne({
+    name: "Invalid",
+    age: 150 // Exceeds max value
+  });
+} catch (error) {
+  if (error instanceof MError) {
+    console.error("Validation error:", error.message);
+  }
+}
 ```
 
-## Architecture
+## Multiple Clients
 
-```
-src/
-├── client.ts          # MongsterClient - connection management
-├── collection/        # Model implementation & CRUD operations
-├── schema/            # Schema builder (M) and type system
-│   ├── base.ts        # Base schema classes
-│   ├── primitives.ts  # String, Number, Boolean, Date
-│   ├── bsons.ts       # ObjectId, Decimal128, Binary
-│   ├── composites.ts  # Object, Array, Tuple, Union
-│   └── schema.ts      # Root MongsterSchema
-├── queries/           # Query builders (find, update, etc.)
-├── types/             # TypeScript type utilities
-└── error.ts           # Error handling
-```
+You can create multiple client instances for different databases:
 
-## Development
+```typescript
+import { MongsterClient, model } from "mongster";
 
-```bash
-# Install dependencies
-bun install
+// Client for main database
+const mainClient = new MongsterClient();
+await mainClient.connect("mongodb://localhost:27017/main");
 
-# Type check
-bun run typecheck
+// Client for analytics database
+const analyticsClient = new MongsterClient();
+await analyticsClient.connect("mongodb://localhost:27017/analytics");
 
-# Run tests
-bun test
-
-# Build
-bun run build
+// Models for different clients
+const User = mainClient.model("users", userSchema);
+const Event = analyticsClient.model("events", eventSchema);
 ```
 
-## Examples
+## API Reference
 
-See the [`examples/`](./examples) directory for more examples.
+### Schema Builder Methods
+
+- `M.string()` - String type
+- `M.number()` - Number type
+- `M.boolean()` - Boolean type
+- `M.date()` - Date type
+- `M.objectId()` - MongoDB ObjectId type
+- `M.binary()` - Binary data type
+- `M.decimal128()` - Decimal128 type
+- `M.object(shape)` - Nested object
+- `M.array(schema)` - Array of items
+- `M.union([...schemas])` - Union type (one of)
+- `M.tuple([...schemas])` - Tuple type (fixed-length array)
+
+### Schema Modifiers
+
+- `.optional()` - Make field optional
+- `.nullable()` - Allow null values
+- `.default(value)` - Set default value
+- `.defaultFn(fn)` - Set default value from function
+- `.min(n)` - Minimum value/length
+- `.max(n)` - Maximum value/length
+- `.enum([...values])` - Enum values
+- `.match(regex)` - Pattern matching (strings)
+- `.index(direction)` - Create index (1 for ascending, -1 for descending)
+- `.uniqueIndex()` - Create unique index
+- `.sparseIndex()` - Create sparse index
+- `.textIndex()` - Create text index
+- `.hashedIndex()` - Create hashed index
+- `.ttl(seconds)` - Create TTL index (only for Date fields)
+
+### Model Methods
+
+**Create**
+- `insertOne(doc, options?)` - Insert one document
+- `insertMany(docs, options?)` - Insert multiple documents
+- `createOne(doc, options?)` - Insert and return document
+- `createMany(docs, options?)` - Insert and return documents
+
+**Read**
+- `find(filter, options?)` - Find documents with query builder
+- `findOne(filter, options?)` - Find one document
+- `findById(id, options?)` - Find by ObjectId
+- `countDocuments(filter, options?)` - Count documents
+- `estimatedDocumentCount(options?)` - Estimated count
+- `distinct(field, filter?, options?)` - Get distinct values
+- `aggregate(pipeline, options?)` - Run aggregation pipeline
+
+**Update**
+- `updateOne(filter, update, options?)` - Update one document
+- `updateMany(filter, update, options?)` - Update multiple documents
+- `replaceOne(filter, doc, options?)` - Replace document
+- `findOneAndUpdate(filter, update, options?)` - Find and update
+- `findOneAndReplace(filter, doc, options?)` - Find and replace
+
+**Delete**
+- `deleteOne(filter, options?)` - Delete one document
+- `deleteMany(filter, options?)` - Delete multiple documents
+- `findOneAndDelete(filter, options?)` - Find and delete
+
+**Index Management**
+- `syncIndexes(options?)` - Synchronize indexes with schema
+- `getCollection()` - Get underlying MongoDB collection
 
 ## License
 
-MIT © IshmamR
+MIT
 
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Repository
+
+[https://github.com/IshmamR/mongster](https://github.com/IshmamR/mongster)
+
+## Issues
+
+[https://github.com/IshmamR/mongster/issues](https://github.com/IshmamR/mongster/issues)

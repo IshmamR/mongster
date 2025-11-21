@@ -152,6 +152,7 @@ class CustomValidationSchema<T> extends MongsterSchemaInternal<T, T> {
 export class WithDefaultSchema<T> extends MongsterSchemaInternal<T, T | undefined> {
   declare $type: T;
   declare $input: T | undefined;
+  declare $brand: "WithDefaultSchema";
 
   // @internal used internally
   inner: MongsterSchemaInternal<T>;
@@ -178,6 +179,7 @@ export class WithDefaultSchema<T> extends MongsterSchemaInternal<T, T | undefine
 export class OptionalSchema<T> extends MongsterSchemaInternal<T | undefined, T | undefined> {
   declare $type: T | undefined;
   declare $input: T | undefined;
+  declare $brand: "OptionalSchema";
 
   // @internal used internally
   inner: MongsterSchemaInternal<T>;
@@ -203,6 +205,7 @@ export class OptionalSchema<T> extends MongsterSchemaInternal<T | undefined, T |
 export class NullableSchema<T> extends MongsterSchemaInternal<T | null, T | null> {
   declare $type: T | null;
   declare $input: T | null;
+  declare $brand: "NullableSchema";
 
   // @internal used internally
   inner: MongsterSchemaInternal<T>;
@@ -236,6 +239,7 @@ interface ArrayChecks<A> {
 export class ArraySchema<T, I> extends MongsterSchemaInternal<T[], I[]> {
   declare $type: T[];
   declare $input: I[];
+  declare $brand: "ArraySchema";
 
   #shapes: MongsterSchemaInternal<T, I>;
   #checks: ArrayChecks<T[]>;

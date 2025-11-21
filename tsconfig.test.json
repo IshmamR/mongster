@@ -1,9 +1,8 @@
 {
   "compilerOptions": {
-    // Environment setup & latest features
     "lib": ["ESNext"],
     "target": "esnext",
-    "module": "Preserve",
+    "module": "preserve",
     "moduleDetection": "force",
     "jsx": "react-jsx",
     "allowJs": true,
@@ -24,7 +23,11 @@
     // Some stricter flags (disabled by default)
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false
+    "noPropertyAccessFromIndexSignature": false,
+
+    "stripInternal": true,
+    "composite": false
   },
-  "exclude": ["dist"]
+  "include": ["**/*.test.ts"],
+  "exclude": ["node_modules"]
 }
