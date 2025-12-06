@@ -111,7 +111,9 @@ export type InferSchemaType<MS extends MongsterSchemaBase<any>> = Prettify<
 >;
 
 type ContainsAll<T, U> = Exclude<U, T> extends never ? true : false;
-export type InferSchemaInputType<MS extends MongsterSchemaBase<any>> =
-  ContainsAll<keyof MS["$input"], TimestampKeys> extends true
-    ? Prettify<Omit<MS["$input"], TimestampKeys> & { [K in TimestampKeys]?: Date }>
-    : MS["$input"];
+export type InferSchemaInputType<MS extends MongsterSchemaBase<any>> = ContainsAll<
+  keyof MS["$input"],
+  TimestampKeys
+> extends true
+  ? Prettify<Omit<MS["$input"], TimestampKeys> & { [K in TimestampKeys]?: Date }>
+  : MS["$input"];

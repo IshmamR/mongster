@@ -15,7 +15,7 @@ const userSchema = M.schema({
   ),
 });
 
-type TUser = M.infer<typeof userSchema>;
+type _TUser = M.infer<typeof userSchema>;
 //    ^?
 type TUserCreate = M.inferInput<typeof userSchema>;
 //    ^?
@@ -24,13 +24,15 @@ const UserModel = mongster.model("users", userSchema);
 
 await mongster.connect(process.env.DB_URL);
 
-const result = await UserModel.createOne({
+const createData: TUserCreate = {
   name: "promethewz",
   age: 18,
   gender: true,
   socials: [{ host: "github", link: "https://github.com/IshmamR" }],
   role: "admin",
   dob: new Date(),
-});
+};
+
+const result = await UserModel.createOne(createData);
 
 console.log(result);
