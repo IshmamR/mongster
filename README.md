@@ -447,7 +447,6 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 - 🐛 [Report bugs](https://github.com/IshmamR/mongster/issues)
 - 💡 [Request features](https://github.com/IshmamR/mongster/issues)
-- 🔒 [Security policy](SECURITY.md)
 
 ## License
 

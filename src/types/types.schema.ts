@@ -1,5 +1,5 @@
 import type { Binary, Decimal128, Double, Int32, ObjectId } from "bson";
-import type { Filter } from "mongodb";
+import type { Document, Filter } from "mongodb";
 import type { MongsterSchemaBase, OptionalSchema, WithDefaultSchema } from "../schema/base";
 import type { Prettify } from "./types.common";
 
