@@ -123,4 +123,4 @@ jobs:
           cd /tmp/test-install
           npm init -y
           npm install $GITHUB_WORKSPACE/*.tgz
-          node -e "require('mongster')" || echo "Package loads successfully"
+          node --input-type=module -e "import('mongster')" || echo "Package loads successfully"
