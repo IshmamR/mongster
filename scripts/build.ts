@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noConsole: script file */
 import { $ } from "bun";
 
 /**
