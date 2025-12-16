@@ -12,14 +12,9 @@ concurrency:
 
 jobs:
   test:
-    name: Test (Node ${{ matrix.node-version }})
+    name: Test
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [18, 20, 22, 24]
     
     steps:
       - name: Checkout code
@@ -29,11 +24,6 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
       
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -90,10 +80,15 @@ jobs:
         continue-on-error: true
 
   build-test:
-    name: Build Validation
+    name: Build Validation (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [test, lint]
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 20, 22, 24]
     
     steps:
       - name: Checkout code
@@ -103,6 +98,11 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
       
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -123,4 +123,4 @@ jobs:
           cd /tmp/test-install
           npm init -y
           npm install $GITHUB_WORKSPACE/*.tgz
-          node --input-type=module -e "import('mongster')" || echo "Package loads successfully"
+          node --input-type=module -e "import('mongster')" && echo "Package loads successfully"
