@@ -43,15 +43,14 @@ export type DotSeparatedKeys<
         : Path;
 
 export type SanitizedSortDirection = Exclude<SortDirection, { readonly $meta: string }>;
-export type SchemaSort<T> =
-  DotSeparatedKeys<T> extends string
-    ?
-        | DotSeparatedKeys<T>
-        | Partial<Record<DotSeparatedKeys<T>, SanitizedSortDirection>>
-        | ReadonlyArray<DotSeparatedKeys<T>>
-        | ReadonlyArray<[DotSeparatedKeys<T>, SanitizedSortDirection]>
-        | [DotSeparatedKeys<T>, SanitizedSortDirection]
-    : never;
+export type SchemaSort<T> = DotSeparatedKeys<T> extends string
+  ?
+      | DotSeparatedKeys<T>
+      | Partial<Record<DotSeparatedKeys<T>, SanitizedSortDirection>>
+      | ReadonlyArray<DotSeparatedKeys<T>>
+      | ReadonlyArray<[DotSeparatedKeys<T>, SanitizedSortDirection]>
+      | [DotSeparatedKeys<T>, SanitizedSortDirection]
+  : never;
 
 type Head<Path> = Path extends `${infer H}.${string}` ? H : Path;
 type Tail<Path> = Path extends `${string}.${infer T}`
@@ -70,24 +69,23 @@ type StripTrailingDots<K> = K extends `${string}.` ? never : K;
 export type AllFilterKeys<T> = StripTrailingDots<AllFilterKeysBase<T>>;
 export type AllProjKeys<T> = StripTrailingDots<AllProjKeysBase<T>>;
 
-type ProjectIncBase<T, Path extends string> =
-  Head<Path> extends keyof T
-    ? Tail<Path> extends never
-      ? Prettify<Pick<T, Head<Path>>>
-      : NonNullable<T[Head<Path>]> extends (infer U)[]
+type ProjectIncBase<T, Path extends string> = Head<Path> extends keyof T
+  ? Tail<Path> extends never
+    ? Prettify<Pick<T, Head<Path>>>
+    : NonNullable<T[Head<Path>]> extends (infer U)[]
+      ? IsOptional<T, Head<Path>> extends true
+        ? { [K in Head<Path>]?: ProjectIncBase<U, Tail<Path>>[] }
+        : { [K in Head<Path>]: ProjectIncBase<U, Tail<Path>>[] }
+      : NonNullable<T[Head<Path>]> extends object
         ? IsOptional<T, Head<Path>> extends true
-          ? { [K in Head<Path>]?: ProjectIncBase<U, Tail<Path>>[] }
-          : { [K in Head<Path>]: ProjectIncBase<U, Tail<Path>>[] }
-        : NonNullable<T[Head<Path>]> extends object
-          ? IsOptional<T, Head<Path>> extends true
-            ? {
-                [K in Head<Path>]?: ProjectIncBase<NonNullable<T[Head<Path>]>, Tail<Path>>;
-              }
-            : {
-                [K in Head<Path>]: ProjectIncBase<NonNullable<T[Head<Path>]>, Tail<Path>>;
-              }
-          : never
-    : never;
+          ? {
+              [K in Head<Path>]?: ProjectIncBase<NonNullable<T[Head<Path>]>, Tail<Path>>;
+            }
+          : {
+              [K in Head<Path>]: ProjectIncBase<NonNullable<T[Head<Path>]>, Tail<Path>>;
+            }
+        : never
+  : never;
 
 export type ProjectionFromInclusionKeys<T, Path extends AllProjKeys<T>> = Prettify<
   UnionToIntersection<Path extends string ? ProjectIncBase<T, Path> : never> &

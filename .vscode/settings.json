@@ -1,16 +1,24 @@
 {
   "editor.formatOnSave": true,
+  "biome.enabled": true,
+  "biome.requireConfiguration": true,
   "editor.defaultFormatter": "biomejs.biome",
   "editor.codeActionsOnSave": {
     "source.fixAll.biome": "explicit",
     "source.biome": "explicit",
     "source.organizeImports.biome": "explicit",
-    "source.removeUnusedImports": "explicit"
+    "source.removeUnusedImports": "explicit",
   },
   "cSpell.words": [
     "bsons",
     "Mongs",
     "mongster"
   ],
-  "typescript.tsdk": "node_modules/typescript/lib"
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "[typescript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  }
 }

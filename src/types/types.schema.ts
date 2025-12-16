@@ -1,5 +1,5 @@
 import type { Binary, Decimal128, Double, Int32, ObjectId } from "bson";
-import type { Filter } from "mongodb";
+import type { Document, Filter } from "mongodb";
 import type { MongsterSchemaBase, OptionalSchema, WithDefaultSchema } from "../schema/base";
 import type { Prettify } from "./types.common";
 
@@ -111,7 +111,9 @@ export type InferSchemaType<MS extends MongsterSchemaBase<any>> = Prettify<
 >;
 
 type ContainsAll<T, U> = Exclude<U, T> extends never ? true : false;
-export type InferSchemaInputType<MS extends MongsterSchemaBase<any>> =
-  ContainsAll<keyof MS["$input"], TimestampKeys> extends true
-    ? Prettify<Omit<MS["$input"], TimestampKeys> & { [K in TimestampKeys]?: Date }>
-    : MS["$input"];
+export type InferSchemaInputType<MS extends MongsterSchemaBase<any>> = ContainsAll<
+  keyof MS["$input"],
+  TimestampKeys
+> extends true
+  ? Prettify<Omit<MS["$input"], TimestampKeys> & { [K in TimestampKeys]?: Date }>
+  : MS["$input"];

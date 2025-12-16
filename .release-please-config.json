@@ -1,0 +1,20 @@
+{
+  "release-type": "node",
+  "package-name": "mongster",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "changelog-sections": [
+    { "type": "feat", "section": "✨ Features" },
+    { "type": "fix", "section": "🐛 Bug Fixes" },
+    { "type": "perf", "section": "⚡ Performance" },
+    { "type": "docs", "section": "📚 Documentation" },
+    { "type": "refactor", "section": "♻️ Refactoring" },
+    { "type": "test", "section": "✅ Tests" },
+    { "type": "build", "section": "🔧 Build System" },
+    { "type": "ci", "section": "👷 CI/CD" },
+    { "type": "chore", "section": "🧹 Chores", "hidden": false }
+  ],
+  "release-search-depth": 100,
+  "pull-request-title-pattern": "chore: release ${version}",
+  "extra-files": []
+}
