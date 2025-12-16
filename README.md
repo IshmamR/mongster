@@ -441,18 +441,20 @@ const Event = analyticsClient.model("events", eventSchema);
 - `syncIndexes(options?)` - Synchronize indexes with schema
 - `getCollection()` - Get underlying MongoDB collection
 
-## License
-
-MIT
-
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-## Repository
+- 🐛 [Report bugs](https://github.com/IshmamR/mongster/issues)
+- 💡 [Request features](https://github.com/IshmamR/mongster/issues)
 
-[https://github.com/IshmamR/mongster](https://github.com/IshmamR/mongster)
+## License
 
-## Issues
+MIT - see [LICENSE](LICENSE) for details
 
-[https://github.com/IshmamR/mongster/issues](https://github.com/IshmamR/mongster/issues)
+## Links
+
+- **GitHub**: [IshmamR/mongster](https://github.com/IshmamR/mongster)
+- **npm**: [mongster](https://www.npmjs.com/package/mongster)
+- **Issues**: [Report a bug](https://github.com/IshmamR/mongster/issues)
+- **Author**: [IshmamR](https://github.com/IshmamR)

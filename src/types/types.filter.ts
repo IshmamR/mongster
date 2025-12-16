@@ -11,6 +11,7 @@ import type {
   BSONRegExp,
   BSONType,
   BSONTypeAlias,
+  Document,
   IntegerType,
   KeysOfAType,
   NumericType,
