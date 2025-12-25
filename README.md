@@ -8,8 +8,9 @@ A type-safe MongoDB ODM (Object Document Mapper) for TypeScript with schema vali
 - 📝 **Schema Validation** - Runtime validation with automatic TypeScript type generation
 - 🔍 **Index Management** - Automatic index synchronization with MongoDB
 - 🎯 **Query Builder** - Fluent, type-safe query API with projection and filtering
+- 🔄 **Transactions** - ACID transactions with automatic session management
 - ⚡ **Optimized Performance** - Built with Bun, compatible with Node.js 18+
-- 🔄 **Timestamps** - Automatic `createdAt` and `updatedAt` field management
+- 🕒 **Timestamps** - Automatic `createdAt` and `updatedAt` field management
 - 🛡️ **Error Handling** - Comprehensive error types for better debugging
 
 ## Installation
@@ -312,6 +313,46 @@ const isConnected = await client.ping();
 await client.disconnect();
 ```
 
+## Transactions
+
+Mongster provides built-in transaction support with automatic session management:
+
+```typescript
+// Simple transaction
+await client.transaction(async (ctx) => {
+  const user = await User.createOne({ name: "Alice", email: "alice@example.com" }, ctx.session);
+  await Log.createOne({ userId: user._id, action: "created" }, ctx.session);
+});
+
+// Transaction with automatic session injection
+await client.transaction(async (ctx) => {
+  const ScopedUser = ctx.use(User);
+  const ScopedLog = ctx.use(Log);
+  
+  const user = await ScopedUser.createOne({ name: "Bob", email: "bob@example.com" });
+  await ScopedLog.createOne({ userId: user._id, action: "created" });
+});
+
+// Transaction with options
+await client.transaction(
+  async (ctx) => {
+    // ... transaction logic
+  },
+  { readConcern: { level: "snapshot" }, writeConcern: { w: "majority" } }
+);
+
+// Manual session management (advanced)
+const session = await client.startSession();
+try {
+  const user = await User.createOne({ name: "Charlie", email: "charlie@example.com" }, { session });
+  // ... more operations
+} finally {
+  await session.endSession();
+}
+```
+
+Transactions automatically handle commit/rollback and session cleanup. Use `ctx.use(model)` for automatic session injection, or pass `{ session }` manually to individual operations.
+
 ## Advanced Filtering
 
 Mongster provides type-safe filtering with MongoDB query operators:
@@ -440,6 +481,20 @@ const Event = analyticsClient.model("events", eventSchema);
 **Index Management**
 - `syncIndexes(options?)` - Synchronize indexes with schema
 - `getCollection()` - Get underlying MongoDB collection
+
+### Client Methods
+
+**Connection**
+- `connect(uri?, options?)` - Connect to MongoDB
+- `disconnect()` - Disconnect from MongoDB
+- `ping()` - Check connection status
+
+**Transactions**
+- `transaction(callback, options?)` - Execute a transaction with automatic commit/rollback
+- `startSession(options?)` - Start a manual MongoDB session
+
+**Models**
+- `model(name, schema)` - Create a model instance
 
 ## Contributing
 
