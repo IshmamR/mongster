@@ -6,6 +6,7 @@ import type {
   CountDocumentsOptions,
   DeleteOptions,
   DistinctOptions,
+  Document,
   FindOneAndDeleteOptions,
   FindOneAndReplaceOptions,
   FindOneAndUpdateOptions,
