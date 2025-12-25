@@ -1,194 +1,227 @@
-import type { ClientSession, ClientSessionOptions, Document, TransactionOptions } from "mongodb";
+import type {
+  ClientSession,
+  ClientSessionOptions,
+  Collection,
+  DeleteResult,
+  Document,
+  Filter,
+  Flatten,
+  InsertManyResult,
+  InsertOneResult,
+  OptionalUnlessRequiredId,
+  TransactionOptions,
+  UpdateResult,
+  WithId,
+  WithoutId,
+} from "mongodb";
 import type { MongsterClient } from "./client";
 import type { MongsterModel } from "./collection";
+import { TransactionError } from "./error";
 import type { MongsterSchema } from "./schema/schema";
-
-export interface MongsterTransactionContext {
-  session: ClientSession;
-}
-
-export interface MongsterTransactionModel<
-  CN extends string,
-  SC extends MongsterSchema<any>,
-  T extends Document,
-  OT extends Document,
-> extends MongsterModel<CN, SC, T, OT> {
-  /** The active session for this transaction-scoped model */
-  readonly session: ClientSession;
-}
+import type { MongsterFilter, MongsterUpdateFilter } from "./types/types.filter";
+import type { AllFilterKeys } from "./types/types.query";
+import type {
+  AggregateTransactionOptions,
+  BulkWriteTransactionOptions,
+  CountTransactionOptions,
+  DeleteTransactionOptions,
+  DistinctTransactionOptions,
+  FindOneAndDeleteTransactionOptions,
+  FindOneAndReplaceTransactionOptions,
+  FindOneAndUpdateTransactionOptions,
+  FindOneTransactionOptions,
+  FindTransactionOptions,
+  InsertOneTransactionOptions,
+  MongsterTransaction,
+  ReplaceTransactionOptions,
+  TransactionCallback,
+  UpdateTransactionOptions,
+} from "./types/types.transaction";
 
 /**
  * Creates a transaction-scoped version of a model that automatically uses the session
  */
-class TransactionModel<
+export class TransactionModel<
   CN extends string,
   SC extends MongsterSchema<any>,
   T extends Document,
   OT extends Document,
 > {
-  private baseModel: MongsterModel<CN, SC, T, OT>;
+  #baseModel: MongsterModel<CN, SC, T, OT>;
   readonly session: ClientSession;
 
   constructor(model: MongsterModel<CN, SC, T, OT>, session: ClientSession) {
-    this.baseModel = model;
+    this.#baseModel = model;
     this.session = session;
   }
 
-  // Proxy all methods to base model with session injection
-  private injectSession<O extends Record<string, any>>(
-    options?: O,
-  ): O & { session: ClientSession } {
-    return { ...options, session: this.session } as O & { session: ClientSession };
+  #injectSession<O extends Record<string, any>>(options?: O): O & { session: ClientSession } {
+    let opt = options;
+    if (typeof options !== "object" || Array.isArray(options)) opt = undefined;
+    return { ...(opt ?? {}), session: this.session } as O & { session: ClientSession };
   }
 
-  async insertOne(input: any, options?: any): Promise<any> {
-    return this.baseModel.insertOne(input, this.injectSession(options));
+  async insertOne(
+    input: OptionalUnlessRequiredId<T>,
+    options?: InsertOneTransactionOptions,
+  ): Promise<InsertOneResult<OT>> {
+    return this.#baseModel.insertOne(input, this.#injectSession(options));
   }
 
-  async insertMany(inputArr: any[], options?: any): Promise<any> {
-    return this.baseModel.insertMany(inputArr, this.injectSession(options));
+  async insertMany(
+    inputArr: OptionalUnlessRequiredId<OT>[],
+    options?: BulkWriteTransactionOptions,
+  ): Promise<InsertManyResult<OT>> {
+    return this.#baseModel.insertMany(inputArr, this.#injectSession(options));
   }
 
-  async createOne(input: any, options?: any): Promise<any> {
-    return this.baseModel.createOne(input, this.injectSession(options));
+  async createOne(
+    input: OptionalUnlessRequiredId<T>,
+    options?: InsertOneTransactionOptions,
+  ): Promise<OT | null> {
+    return this.#baseModel.createOne(input, this.#injectSession(options));
   }
 
-  async createMany(inputArr: any[], options?: any): Promise<any> {
-    return this.baseModel.createMany(inputArr, this.injectSession(options));
+  async createMany(
+    inputArr: OptionalUnlessRequiredId<T>[],
+    options?: BulkWriteTransactionOptions,
+  ): Promise<OT[]> {
+    return this.#baseModel.createMany(inputArr, this.#injectSession(options));
   }
 
-  async updateOne(filter: any, updateData: any, options?: any): Promise<any> {
-    return this.baseModel.updateOne(filter, updateData, this.injectSession(options));
+  async updateOne(
+    filter: MongsterFilter<OT>,
+    updateData: MongsterUpdateFilter<OT>,
+    options?: UpdateTransactionOptions,
+  ): Promise<UpdateResult<OT>> {
+    return this.#baseModel.updateOne(filter, updateData, this.#injectSession(options));
   }
 
-  async updateMany(filter: any, updateData: any, options?: any): Promise<any> {
-    return this.baseModel.updateMany(filter, updateData, this.injectSession(options));
+  async updateMany(
+    filter: MongsterFilter<OT>,
+    updateData: MongsterUpdateFilter<OT>,
+    options?: UpdateTransactionOptions,
+  ): Promise<UpdateResult<OT>> {
+    return this.#baseModel.updateMany(filter, updateData, this.#injectSession(options));
   }
 
-  async findOneAndUpdate(filter: any, updateData: any, options?: any): Promise<any> {
-    return this.baseModel.findOneAndUpdate(filter, updateData, this.injectSession(options));
+  async findOneAndUpdate(
+    filter: MongsterFilter<OT>,
+    updateData: MongsterUpdateFilter<OT>,
+    options?: FindOneAndUpdateTransactionOptions,
+  ): Promise<WithId<OT> | null> {
+    return this.#baseModel.findOneAndUpdate(filter, updateData, this.#injectSession(options));
   }
 
-  async replaceOne(filter: any, replacement: any, options?: any): Promise<any> {
-    return this.baseModel.replaceOne(filter, replacement, this.injectSession(options));
+  async replaceOne(
+    filter: MongsterFilter<OT>,
+    replacement: WithoutId<OT>,
+    options?: ReplaceTransactionOptions,
+  ): Promise<UpdateResult<OT>> {
+    return this.#baseModel.replaceOne(filter, replacement, this.#injectSession(options));
   }
 
-  async findOneAndReplace(filter: any, replacement: any, options?: any): Promise<any> {
-    return this.baseModel.findOneAndReplace(filter, replacement, this.injectSession(options));
+  async findOneAndReplace(
+    filter: MongsterFilter<OT>,
+    replacement: WithoutId<OT>,
+    options?: FindOneAndReplaceTransactionOptions,
+  ): Promise<WithId<OT> | null> {
+    return this.#baseModel.findOneAndReplace(filter, replacement, this.#injectSession(options));
   }
 
-  async deleteOne(filter: any, options?: any): Promise<any> {
-    return this.baseModel.deleteOne(filter, this.injectSession(options));
+  async deleteOne(
+    filter: MongsterFilter<OT>,
+    options?: DeleteTransactionOptions,
+  ): Promise<DeleteResult> {
+    return this.#baseModel.deleteOne(filter, this.#injectSession(options));
   }
 
-  async deleteMany(filter: any, options?: any): Promise<any> {
-    return this.baseModel.deleteMany(filter, this.injectSession(options));
+  async deleteMany(
+    filter: MongsterFilter<OT>,
+    options?: DeleteTransactionOptions,
+  ): Promise<DeleteResult> {
+    return this.#baseModel.deleteMany(filter, this.#injectSession(options));
   }
 
-  async findOneAndDelete(filter: any, options?: any): Promise<any> {
-    return this.baseModel.findOneAndDelete(filter, this.injectSession(options));
+  async findOneAndDelete(
+    filter: MongsterFilter<OT>,
+    options?: FindOneAndDeleteTransactionOptions,
+  ): Promise<WithId<OT> | null> {
+    return this.#baseModel.findOneAndDelete(filter, this.#injectSession(options));
   }
 
-  find(filter?: any, options?: any): any {
-    return this.baseModel.find(filter, this.injectSession(options));
+  find(filter?: MongsterFilter<OT>, options?: FindTransactionOptions) {
+    return this.#baseModel.find(filter, this.#injectSession(options));
   }
 
-  async findOne(filter: any, options?: any): Promise<any> {
-    return this.baseModel.findOne(filter, this.injectSession(options));
+  async findOne(
+    filter: MongsterFilter<OT>,
+    options?: FindOneTransactionOptions,
+  ): Promise<OT | null> {
+    return this.#baseModel.findOne(filter, this.#injectSession(options));
   }
 
-  async count(filter?: any, options?: any): Promise<number> {
-    return this.baseModel.count(filter, this.injectSession(options));
+  async count(filter?: Filter<OT>, options?: CountTransactionOptions): Promise<number> {
+    return this.#baseModel.count(filter, this.#injectSession(options));
   }
 
-  async distinct(key: any, filter?: any, options?: any): Promise<any> {
-    return this.baseModel.distinct(key, filter, this.injectSession(options));
+  async distinct(
+    key: AllFilterKeys<OT>,
+    filter?: MongsterFilter<OT>,
+    options?: DistinctTransactionOptions,
+  ): Promise<Flatten<WithId<OT>[string]>[]> {
+    return this.#baseModel.distinct(key, filter, this.#injectSession(options));
   }
 
   async aggregateRaw<ReturnType = Document[]>(
     pipeline?: Document[],
-    options?: any,
+    options?: AggregateTransactionOptions,
   ): Promise<ReturnType> {
-    return this.baseModel.aggregateRaw<ReturnType>(pipeline, this.injectSession(options));
+    return this.#baseModel.aggregateRaw<ReturnType>(pipeline, this.#injectSession(options));
   }
 
-  // Expose useful methods from base model
-  getCollection(): any {
-    return this.baseModel.getCollection();
+  getCollection(): Collection<OT> {
+    return this.#baseModel.getCollection();
   }
 
   getCollectionName(): string {
-    return this.baseModel.getCollectionName();
+    return this.#baseModel.getCollectionName();
   }
 }
 
-export type TransactionCallback<T> = (ctx: MongsterTransactionContext) => Promise<T>;
-
-export interface MongsterTransaction {
-  /**
-   * Start a transaction with automatic commit/abort handling
-   * @param callback Transaction callback function
-   * @param options Transaction options
-   * @returns Result from the callback
-   */
-  <T>(callback: TransactionCallback<T>, options?: TransactionOptions): Promise<T>;
-
-  /**
-   * Get a model scoped to this transaction
-   * @param model The model to wrap with transaction context
-   * @returns Transaction-scoped model that automatically uses the session
-   */
-  with<M extends MongsterModel<any, any, any, any>>(
-    model: M,
-  ): MongsterTransactionModel<any, any, any, any>;
-}
-
 /**
- * Creates a transaction manager for the client
+ * Build a transaction manager for the client
  */
 export function createTransactionManager(client: MongsterClient): {
   transaction: MongsterTransaction;
   startSession: (options?: ClientSessionOptions) => Promise<ClientSession>;
 } {
-  let currentSession: ClientSession | null = null;
-
-  const transaction: any = async <T>(
+  const transaction: MongsterTransaction = async <T = void>(
     callback: TransactionCallback<T>,
     options?: TransactionOptions,
   ): Promise<T> => {
     const mongoClient = client.getClient();
     const session = mongoClient.startSession();
-    currentSession = session;
 
     try {
-      let result: T | undefined;
+      let result!: T;
 
       await session.withTransaction(async () => {
-        const ctx: MongsterTransactionContext = { session };
-        result = await callback(ctx);
+        result = await callback({
+          session,
+          use: (model) => new TransactionModel(model, session),
+        });
       }, options);
 
-      if (result === undefined) {
-        throw new Error("Transaction callback did not return a value");
-      }
-
       return result;
+    } catch (err) {
+      if (err instanceof Error) {
+        throw new TransactionError(err.message, { cause: err });
+      }
+      throw new TransactionError("Transaction failed", { cause: err });
     } finally {
       await session.endSession();
-      currentSession = null;
     }
-  };
-
-  transaction.with = <M extends MongsterModel<any, any, any, any>>(
-    model: M,
-  ): MongsterTransactionModel<any, any, any, any> => {
-    if (!currentSession) {
-      throw new Error(
-        "Cannot create transaction-scoped model outside of a transaction. Call this within a transaction callback.",
-      );
-    }
-
-    return new TransactionModel(model, currentSession) as any;
   };
 
   const startSession = async (options?: ClientSessionOptions): Promise<ClientSession> => {

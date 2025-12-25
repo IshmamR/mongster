@@ -1,7 +1,14 @@
-import { type Db, MongoClient, type MongoClientOptions } from "mongodb";
+import {
+  type ClientSession,
+  type ClientSessionOptions,
+  type Db,
+  MongoClient,
+  type MongoClientOptions,
+} from "mongodb";
 import { MongsterModel } from "./collection";
 import type { MongsterSchema } from "./schema/schema";
-import { createTransactionManager, type MongsterTransaction } from "./transaction";
+import { createTransactionManager } from "./transaction";
+import type { MongsterTransaction } from "./types/types.transaction";
 
 interface MongsterClientOptions extends MongoClientOptions {
   retryConnection?: number;
@@ -16,19 +23,31 @@ export class MongsterClient {
   #dbName: string | undefined;
   #connected = false;
 
-  #schemas = new Map<string, MongsterSchema<any>>();
+  #schemas = new Map<string, MongsterSchema<any, any>>();
   #models = new Map<string, MongsterModel<any, any, any, any>>();
 
-  /** Transaction API - automatically handles session management */
-  public readonly transaction: MongsterTransaction;
+  /**
+   * Starts a transaction with automatic commit/abort handling
+   * @param callback Transaction callback function
+   * @param options Transaction options
+   * @returns Result from the callback, or void if no value is returned
+   */
+  readonly transaction: MongsterTransaction;
+
+  /**
+   * Starts a new MongoDB session for manual session management
+   * @param options Session options
+   * @returns A new ClientSession
+   */
+  readonly startSession: (options?: ClientSessionOptions) => Promise<ClientSession>;
 
   constructor(uri?: string, options?: MongsterClientOptions) {
     this.#uri = uri;
     this.#options = { ...this.#options, ...options };
 
-    // Initialize transaction API
-    const { transaction } = createTransactionManager(this);
+    const { transaction, startSession } = createTransactionManager(this);
     this.transaction = transaction;
+    this.startSession = startSession;
   }
 
   model<CN extends string, SC extends MongsterSchema<any, any>>(collectionName: CN, schema: SC) {

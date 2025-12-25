@@ -58,12 +58,12 @@ async function main() {
     // Transaction automatically rolled back
   }
 
-  // Example 2: Using transaction.with() for cleaner syntax
+  // Example 2: Using ctx.with() for cleaner syntax
   try {
-    const result = await mongster.transaction(async () => {
+    const result = await mongster.transaction(async (ctx) => {
       // Get transaction-scoped models that automatically use the session
-      const TxUser = mongster.transaction.with(User);
-      const TxTransaction = mongster.transaction.with(Transaction);
+      const TxUser = ctx.with(User);
+      const TxTransaction = ctx.with(Transaction);
 
       // No need to pass session manually - it's automatic!
       const user = await TxUser.createOne({
@@ -90,9 +90,9 @@ async function main() {
 
   // Example 3: Transfer between users (classic transaction use case)
   try {
-    await mongster.transaction(async () => {
-      const TxUser = mongster.transaction.with(User);
-      const TxTransaction = mongster.transaction.with(Transaction);
+    await mongster.transaction(async (ctx) => {
+      const TxUser = ctx.with(User);
+      const TxTransaction = ctx.with(Transaction);
 
       const fromUser = await TxUser.findOne({ email: "alice@example.com" });
       const toUser = await TxUser.findOne({ email: "bob@example.com" });
@@ -133,8 +133,8 @@ async function main() {
 
   // Example 4: Transaction with custom options
   await mongster.transaction(
-    async () => {
-      const TxUser = mongster.transaction.with(User);
+    async (ctx) => {
+      const TxUser = ctx.with(User);
       // Your transaction logic here
       return await TxUser.count();
     },

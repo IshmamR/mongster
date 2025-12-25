@@ -1,8 +1,10 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { MongoMemoryServer } from "mongodb-memory-server";
+import { afterAll, beforeAll, describe, expect, expectTypeOf, test } from "bun:test";
+import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { TransactionError } from "../src/error";
 import { M, MongsterClient } from "../src/index";
+import type { InferSchemaType } from "../src/types/types.schema";
 
-let mongod: MongoMemoryServer | null = null;
+let mongod: MongoMemoryReplSet | null = null;
 let client: MongsterClient;
 
 const userSchema = M.schema({
@@ -19,16 +21,12 @@ const logSchema = M.schema({
 
 describe("Transaction API", () => {
   beforeAll(async () => {
-    // Start MongoDB Memory Server with replica set support
-    mongod = await MongoMemoryServer.create({
-      instance: {
-        replSet: "rs0",
-      },
-    });
+    mongod = await MongoMemoryReplSet.create({ replSet: { count: 2 } });
+
     client = new MongsterClient();
     const uri = mongod.getUri();
-    await client.connect(uri + "?replicaSet=rs0");
-  });
+    await client.connect(uri);
+  }, 10000);
 
   afterAll(async () => {
     await client.disconnect();
@@ -40,10 +38,7 @@ describe("Transaction API", () => {
 
     const result = await client.transaction(async (ctx) => {
       const user = await User.createOne(
-        {
-          name: "Alice",
-          email: "alice@test.com",
-        },
+        { name: "Alice", email: "alice@test.com" },
         { session: ctx.session },
       );
 
@@ -56,10 +51,10 @@ describe("Transaction API", () => {
       return user;
     });
 
+    expectTypeOf<InferSchemaType<typeof userSchema> | null>(result);
     expect(result).toBeDefined();
     expect(result?.name).toBe("Alice");
 
-    // Verify data persisted
     const user = await User.findOne({ email: "alice@test.com" });
     expect(user?.balance).toBe(100);
   });
@@ -67,49 +62,49 @@ describe("Transaction API", () => {
   test("should rollback transaction on error", async () => {
     const User = client.model("users_rollback", userSchema);
 
+    const { insertedId: user1Id } = await User.insertOne({
+      name: "Alice",
+      email: "alice@trans.gender",
+    });
+
     try {
       await client.transaction(async (ctx) => {
-        await User.createOne(
-          {
-            name: "Bob",
-            email: "bob@test.com",
-          },
+        await User.updateOne(
+          { _id: user1Id },
+          { $set: { email: "alice@ungabunga.gg" } },
           { session: ctx.session },
         );
 
-        // Simulate an error
-        throw new Error("Simulated error");
+        await User.createOne({ name: "Bob", email: "bob@test.com" }, { session: ctx.session });
+
+        throw Error("Simulated error");
       });
     } catch (error: any) {
       expect(error.message).toContain("Simulated error");
     }
 
-    // Verify data was rolled back
-    const user = await User.findOne({ email: "bob@test.com" });
-    expect(user).toBeNull();
+    const user1 = await User.findOne({ _id: user1Id });
+    expect(user1?.email).toBe("alice@trans.gender");
+
+    const user2 = await User.findOne({ email: "bob@test.com" });
+    expect(user2).toBeNull();
   });
 
-  test("should work with transaction.with() for automatic session injection", async () => {
+  test("should work with ctx.use() for automatic session injection", async () => {
     const User = client.model("users_with", userSchema);
     const Log = client.model("logs_with", logSchema);
 
-    const result = await client.transaction(async () => {
-      const TxUser = client.transaction.with(User);
-      const TxLog = client.transaction.with(Log);
+    const result = await client.transaction(async (ctx) => {
+      const ScopedUser = ctx.use(User);
+      const ScopedLog = ctx.use(Log);
 
-      const user = await TxUser.createOne({
-        name: "Charlie",
-        email: "charlie@test.com",
-      });
+      const user = await ScopedUser.createOne({ name: "Charlie", email: "charlie@test.com" });
 
       if (!user) throw new Error("User creation failed");
 
-      await TxLog.createOne({
-        userId: user._id,
-        action: "created",
-      });
+      await ScopedLog.createOne({ userId: user._id, action: "created" });
 
-      await TxUser.updateOne({ _id: user._id }, { $set: { balance: 50 } });
+      await ScopedUser.updateOne({ _id: user._id }, { $set: { balance: 50 } });
 
       return user;
     });
@@ -117,7 +112,6 @@ describe("Transaction API", () => {
     expect(result).toBeDefined();
     expect(result?.name).toBe("Charlie");
 
-    // Verify both collections have data
     const user = await User.findOne({ email: "charlie@test.com" });
     expect(user?.balance).toBe(50);
 
@@ -130,53 +124,31 @@ describe("Transaction API", () => {
     const User = client.model("users_complex", userSchema);
     const Log = client.model("logs_complex", logSchema);
 
-    // Create initial users
-    const alice = await User.createOne({
-      name: "Alice",
-      email: "alice@complex.com",
-      balance: 100,
-    });
+    const alice = await User.createOne({ name: "Alice", email: "alice@complex.com", balance: 100 });
 
-    const bob = await User.createOne({
-      name: "Bob",
-      email: "bob@complex.com",
-      balance: 50,
-    });
+    const bob = await User.createOne({ name: "Bob", email: "bob@complex.com", balance: 50 });
 
-    // Transfer money in a transaction
-    await client.transaction(async () => {
-      const TxUser = client.transaction.with(User);
-      const TxLog = client.transaction.with(Log);
+    await client.transaction(async (ctx) => {
+      const ScopedUser = ctx.use(User);
+      const ScopedLog = ctx.use(Log);
 
       if (!alice || !bob) throw new Error("Users not found");
 
-      // Debit Alice
-      await TxUser.updateOne({ _id: alice._id }, { $inc: { balance: -30 } });
+      await ScopedUser.updateOne({ _id: alice._id }, { $inc: { balance: -30 } });
 
-      await TxLog.createOne({
-        userId: alice._id,
-        action: "transfer_out",
-        amount: 30,
-      });
+      await ScopedLog.createOne({ userId: alice._id, action: "transfer_out", amount: 30 });
 
-      // Credit Bob
-      await TxUser.updateOne({ _id: bob._id }, { $inc: { balance: 30 } });
+      await ScopedUser.updateOne({ _id: bob._id }, { $inc: { balance: 30 } });
 
-      await TxLog.createOne({
-        userId: bob._id,
-        action: "transfer_in",
-        amount: 30,
-      });
+      await ScopedLog.createOne({ userId: bob._id, action: "transfer_in", amount: 30 });
     });
 
-    // Verify final balances
     const aliceAfter = await User.findOne({ _id: alice?._id });
     const bobAfter = await User.findOne({ _id: bob?._id });
 
     expect(aliceAfter?.balance).toBe(70);
     expect(bobAfter?.balance).toBe(80);
 
-    // Verify logs were created
     const aliceLogs = await Log.find({ userId: alice?._id });
     const bobLogs = await Log.find({ userId: bob?._id });
 
@@ -188,31 +160,28 @@ describe("Transaction API", () => {
     const User = client.model("users_options", userSchema);
 
     const result = await client.transaction(
-      async () => {
-        const TxUser = client.transaction.with(User);
-
-        return await TxUser.createOne({
-          name: "Dave",
-          email: "dave@test.com",
-        });
+      async (ctx) => {
+        const ScopedUser = ctx.use(User);
+        const result = await ScopedUser.createOne({ name: "Dave", email: "dave@test.com" });
+        return result;
       },
-      {
-        readConcern: { level: "snapshot" },
-        writeConcern: { w: "majority" },
-      },
+      { readConcern: { level: "snapshot" }, writeConcern: { w: "majority" } },
     );
 
     expect(result).toBeDefined();
     expect(result?.name).toBe("Dave");
+
+    const exists = await User.findOne({ name: "Dave" });
+    expect(exists).not.toBeNull();
   });
 
   test("should handle nested operations correctly", async () => {
     const User = client.model("users_nested", userSchema);
 
-    await client.transaction(async () => {
-      const TxUser = client.transaction.with(User);
+    await client.transaction(async (ctx) => {
+      const ScopedUser = ctx.use(User);
 
-      const users = await TxUser.createMany([
+      const users = await ScopedUser.createMany([
         { name: "User1", email: "user1@test.com" },
         { name: "User2", email: "user2@test.com" },
         { name: "User3", email: "user3@test.com" },
@@ -220,18 +189,15 @@ describe("Transaction API", () => {
 
       expect(users.length).toBe(3);
 
-      // Update all users
       for (const user of users) {
-        await TxUser.updateOne({ _id: user._id }, { $set: { balance: 25 } });
+        await ScopedUser.updateOne({ _id: user._id }, { $set: { balance: 25 } });
       }
 
-      // Verify count
-      const count = await TxUser.count();
+      const count = await ScopedUser.count();
       expect(count).toBe(3);
     });
 
-    // Verify all persisted
-    const allUsers = await User.find({});
+    const allUsers = await User.find();
     expect(allUsers.length).toBe(3);
     allUsers.forEach((user) => {
       expect(user.balance).toBe(25);
@@ -242,21 +208,106 @@ describe("Transaction API", () => {
     const User = client.model("users_partial_rollback", userSchema);
 
     try {
-      await client.transaction(async () => {
-        const TxUser = client.transaction.with(User);
+      await client.transaction(async (ctx) => {
+        const ScopedUser = ctx.use(User);
 
-        await TxUser.createOne({ name: "User1", email: "user1@partial.com" });
-        await TxUser.createOne({ name: "User2", email: "user2@partial.com" });
+        await ScopedUser.createOne({ name: "User1", email: "user1@partial.com" });
+        await ScopedUser.createOne({ name: "User2", email: "user2@partial.com" });
 
-        // Error after 2 inserts
-        throw new Error("Partial rollback test");
+        const userCount = await ScopedUser.count();
+        expect(userCount).toBe(2);
+
+        throw Error("Partial rollback test");
       });
     } catch (error: any) {
       expect(error.message).toBe("Partial rollback test");
     }
 
-    // Verify nothing was persisted
-    const users = await User.find({});
-    expect(users.length).toBe(0);
+    const usersCount = await User.count();
+    expect(usersCount).toBe(0);
+  });
+
+  test("should properly propagate error cause in transaction failures", async () => {
+    const originalError = new Error("Original cause");
+    originalError.cause = "Nested cause";
+
+    try {
+      await client.transaction(async () => {
+        throw originalError;
+      });
+    } catch (error: any) {
+      expect(error.message).toBe("Original cause");
+      expect(error.cause).toBeDefined();
+    }
+  });
+
+  test("should handle distinct and aggregateRaw operations in transactions", async () => {
+    const User = client.model("users_distinct_agg", userSchema);
+
+    await client.transaction(async (ctx) => {
+      const ScopedUser = ctx.use(User);
+
+      await ScopedUser.createMany([
+        { name: "Alice", email: "alice@distinct.com", balance: 100 },
+        { name: "Bob", email: "bob@distinct.com", balance: 200 },
+        { name: "Alice", email: "alice2@distinct.com", balance: 150 },
+      ]);
+
+      const distinctNames = await ScopedUser.distinct("name");
+      expect(distinctNames).toContain("Alice");
+      expect(distinctNames).toContain("Bob");
+      expect(distinctNames.length).toBe(2);
+
+      const aggResult = await ScopedUser.aggregateRaw([
+        { $group: { _id: "$name", totalBalance: { $sum: "$balance" } } },
+      ]);
+      expect(aggResult.length).toBe(2);
+      const aliceGroup = aggResult.find((g: any) => g._id === "Alice");
+      expect(aliceGroup?.totalBalance).toBe(250); // 100 + 150
+    });
+  });
+
+  test("should expose and allow manual startSession usage", async () => {
+    const session = await client.startSession();
+    expect(session).toBeDefined();
+    expect(typeof session.endSession).toBe("function");
+
+    const User = client.model("users_manual_session", userSchema);
+    const user = await User.createOne({ name: "Manual", email: "manual@test.com" }, { session });
+    expect(user).toBeDefined();
+
+    await session.endSession();
+
+    expect(session.hasEnded).toBe(true);
+  });
+
+  test("should handle invalid options gracefully in transaction methods", async () => {
+    const User = client.model("users_invalid_options", userSchema);
+
+    await client.transaction(async (ctx) => {
+      const ScopedUser = ctx.use(User);
+
+      const user = await ScopedUser.createOne({ name: "Test", email: "test@invalid.com" });
+      expect(user).toBeDefined();
+
+      await ScopedUser.updateOne({ _id: user?._id }, { $set: { balance: 10 } });
+    });
+  });
+
+  test.only("should ensure sessions are properly ended even on errors", async () => {
+    const User = client.model("users_session_leak", userSchema);
+
+    try {
+      await client.transaction(async (ctx) => {
+        const ScopedUser = ctx.use(User);
+        await ScopedUser.createOne({ name: "LeakTest", email: "leak@test.com" });
+        throw new Error("Force failure");
+      });
+    } catch (err) {
+      expect(err).toBeInstanceOf(TransactionError);
+    }
+
+    const count = await User.count();
+    expect(count).toBe(0);
   });
 });

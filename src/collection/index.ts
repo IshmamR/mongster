@@ -201,7 +201,7 @@ export class MongsterModel<
    * Insert a document to the collection.
    */
   async insertOne(
-    input: OptionalUnlessRequiredId<OT>,
+    input: OptionalUnlessRequiredId<T>,
     options?: InsertOneOptions,
   ): Promise<InsertOneResult<OT>> {
     if (!input || typeof input !== "object") {
@@ -215,7 +215,7 @@ export class MongsterModel<
 
     const collection = this.getCollection();
 
-    const parsedInput = this.#schema.parse(input) as typeof input;
+    const parsedInput = this.#schema.parse(input) as OptionalUnlessRequiredId<OT>;
 
     const result = await collection.insertOne(parsedInput, options);
 
