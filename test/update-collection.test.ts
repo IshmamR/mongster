@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { MongoMemoryServer } from "mongodb-memory-server";
 import { ObjectId } from "mongodb";
-import { MongsterSchemaBuilder } from "../src/schema";
+import { MongoMemoryServer } from "mongodb-memory-server";
 import { MongsterClient } from "../src/client";
 import { ValidationError } from "../src/error";
+import { MongsterSchemaBuilder } from "../src/schema";
 
 const M = new MongsterSchemaBuilder();
 

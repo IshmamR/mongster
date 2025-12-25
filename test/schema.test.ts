@@ -963,10 +963,10 @@ describe("Deeply Nested Structures", () => {
     ];
 
     const result = schema.parse(validData);
-    expect(result[0]!.active).toBe(true);
-    expect(result[1]!.active).toBe(false);
-    expect(result[0]!.data.type).toBe("text");
-    expect(result[1]!.data.type).toBe("image");
+    expect(result[0]?.active).toBe(true);
+    expect(result[1]?.active).toBe(false);
+    expect(result[0]?.data.type).toBe("text");
+    expect(result[1]?.data.type).toBe("image");
   });
 
   test("should handle nested tuples with complex schemas", () => {
@@ -1118,9 +1118,9 @@ describe("Deeply Nested Structures", () => {
     ];
 
     const result = schema.parse(validData);
-    expect(result[0]!.type).toBe("user");
+    expect(result[0]?.type).toBe("user");
     expect((result[0] as any).profile.preferences.theme).toBe("light");
-    expect(result[1]!.type).toBe("system");
+    expect(result[1]?.type).toBe("system");
   });
 
   test("should provide meaningful error messages for nested failures", () => {
@@ -1270,8 +1270,8 @@ describe("MongsterSchema Root Schema", () => {
       const result = schema.parse(data);
       expect(result._id).toBeInstanceOf(ObjectId);
       expect(result.user.settings.theme).toBe("light");
-      expect(result.posts[0]!.tags).toEqual([]);
-      expect(result.posts[0]!.metadata.views).toBe(0);
+      expect(result.posts[0]?.tags).toEqual([]);
+      expect(result.posts[0]?.metadata.views).toBe(0);
     });
 
     test("should validate all required fields", () => {

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { MongoMemoryServer } from "mongodb-memory-server";
-import { MongsterSchemaBuilder } from "../src/schema";
 import { MongsterClient } from "../src/client";
+import { MongsterSchemaBuilder } from "../src/schema";
 
 const M = new MongsterSchemaBuilder();
 
@@ -263,7 +263,7 @@ describe("Index Automation with MongoDB", () => {
       const Model1 = tempClient.model("auto_sync_test1", schema1);
       const Model2 = tempClient.model("auto_sync_test2", schema2);
 
-      await tempClient.connect(mongod!.getUri(), { autoIndex: { syncOnConnect: true } });
+      await tempClient.connect(mongod?.getUri(), { autoIndex: { syncOnConnect: true } });
 
       const col1 = Model1.getCollection();
       const indexes1 = await col1.listIndexes().toArray();
@@ -285,7 +285,7 @@ describe("Index Automation with MongoDB", () => {
 
       const _Model = tempClient.model("no_auto_sync_test", schema);
 
-      await tempClient.connect(mongod!.getUri());
+      await tempClient.connect(mongod?.getUri());
 
       const db = tempClient.getDb();
       const collections = await db.listCollections({ name: "no_auto_sync_test" }).toArray();
@@ -314,7 +314,7 @@ describe("Index Automation with MongoDB", () => {
       const Model2 = tempClient.model("pre_connect_model2", schema2);
       const Model3 = tempClient.model("pre_connect_model3", schema3);
 
-      await tempClient.connect(mongod!.getUri(), { autoIndex: { syncOnConnect: true } });
+      await tempClient.connect(mongod?.getUri(), { autoIndex: { syncOnConnect: true } });
 
       const col1 = Model1.getCollection();
       const indexes1 = await col1.listIndexes().toArray();
@@ -347,7 +347,7 @@ describe("Index Automation with MongoDB", () => {
 
       const Model = tempClient.model("pre_connect_operations", schema);
 
-      await tempClient.connect(mongod!.getUri(), { autoIndex: { syncOnConnect: true } });
+      await tempClient.connect(mongod?.getUri(), { autoIndex: { syncOnConnect: true } });
 
       await Model.createOne({ username: "user1", age: 25 });
       await Model.createOne({ username: "user2", age: 30 });
@@ -794,12 +794,12 @@ describe("Index Automation with MongoDB", () => {
         field: M.string().index(),
       });
 
-      await tempClient.connect(mongod!.getUri());
+      await tempClient.connect(mongod?.getUri());
       const Model1 = tempClient.model("reconnection_test", schema);
       await Model1.syncIndexes();
       await tempClient.disconnect();
 
-      await tempClient.connect(mongod!.getUri());
+      await tempClient.connect(mongod?.getUri());
       const Model2 = tempClient.model("reconnection_test", schema);
       const result = await Model2.syncIndexes();
 

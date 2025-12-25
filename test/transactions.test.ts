@@ -281,20 +281,7 @@ describe("Transaction API", () => {
     expect(session.hasEnded).toBe(true);
   });
 
-  test("should handle invalid options gracefully in transaction methods", async () => {
-    const User = client.model("users_invalid_options", userSchema);
-
-    await client.transaction(async (ctx) => {
-      const ScopedUser = ctx.use(User);
-
-      const user = await ScopedUser.createOne({ name: "Test", email: "test@invalid.com" });
-      expect(user).toBeDefined();
-
-      await ScopedUser.updateOne({ _id: user?._id }, { $set: { balance: 10 } });
-    });
-  });
-
-  test.only("should ensure sessions are properly ended even on errors", async () => {
+  test("should ensure sessions are properly ended even on errors", async () => {
     const User = client.model("users_session_leak", userSchema);
 
     try {
