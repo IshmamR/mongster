@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { MongoMemoryServer } from "mongodb-memory-server";
 import { Decimal128, ObjectId } from "mongodb";
-import { MongsterSchemaBuilder } from "../src/schema";
+import { MongoMemoryServer } from "mongodb-memory-server";
 import { MongsterClient } from "../src/client";
+import { MongsterSchemaBuilder } from "../src/schema";
 
 const M = new MongsterSchemaBuilder();
 

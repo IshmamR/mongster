@@ -1,0 +1,30 @@
+// Folder-specific settings
+//
+// For a full list of overridable settings, and general information on folder-specific settings,
+// see the documentation: https://zed.dev/docs/configuring-zed#settings-files
+{
+  "format_on_save": "on",
+  "remove_trailing_whitespace_on_save": true,
+  "languages": {
+    "TypeScript": {
+      "language_servers": ["biome", "typescript-language-server"],
+      "formatter": "language_server",
+    },
+    "JSON": {
+      "language_servers": ["biome"],
+      "formatter": "language_server",
+    },
+  },
+
+  "lsp": {
+    "biome": {
+      "settings": {
+        "code_actions_on_save": {
+          "source.fixAll.biome": true,
+          "source.organizeImports.biome": true,
+          "source.removeUnusedImports": true,
+        },
+      },
+    },
+  },
+}
