@@ -1,98 +1,157 @@
-export interface MIssue {
+export interface MongsterIssue {
   path?: (string | number)[];
   message: string;
 }
 
+const MONGSTER_ERROR_CODE = {
+  SCHEMA: "SCHEMA_ERROR",
+  VALIDATION: "VALIDATION_ERROR",
+  QUERY: "QUERY_ERROR",
+  CONNECTION: "CONNECTION_ERROR",
+  TRANSACTION: "TRANSACTION_ERROR",
+  INDEX_SYNC: "INDEX_SYNC_ERROR",
+} as const;
+const mongsterErrorCodes = Object.values(MONGSTER_ERROR_CODE);
+
+export type MongsterErrorCode = (typeof mongsterErrorCodes)[number];
+
 /**
- * Yes, it is the error class
+ * Base error class for all Mongster errors.
  */
-export class MError extends Error {
-  issues: MIssue[];
+export class MongsterError extends Error {
+  /**
+   * Toggle stack trace capture for all `MongsterError` instances.
+   * ```ts
+   * MongsterError.stackTraces = false; // disable (e.g. on production for a little less overhead)
+   * MongsterError.stackTraces = true;  // enable  (default)
+   * ```
+   */
+  static stackTraces = true;
 
-  constructor(issues: string, options?: ErrorOptions);
-  constructor(issues: MIssue | MIssue[], message?: string, options?: ErrorOptions);
+  readonly code: MongsterErrorCode;
+  readonly issues: MongsterIssue[];
 
+  // Overloads
+  constructor(code: MongsterErrorCode, message: string, options?: ErrorOptions);
+  constructor(code: MongsterErrorCode, issue: MongsterIssue, options?: ErrorOptions);
   constructor(
-    issues: string | MIssue | MIssue[],
-    arg2?: string | ErrorOptions,
-    arg3?: ErrorOptions,
+    code: MongsterErrorCode,
+    issue: MongsterIssue,
+    message?: string,
+    options?: ErrorOptions,
+  );
+  constructor(code: MongsterErrorCode, issues: MongsterIssue[], options?: ErrorOptions);
+  constructor(
+    code: MongsterErrorCode,
+    issues: MongsterIssue[],
+    message?: string,
+    options?: ErrorOptions,
+  );
+  // Implementation
+  constructor(
+    code: MongsterErrorCode,
+    msgOrIssueOrIssues: string | MongsterIssue | MongsterIssue[],
+    maybeMessageOrOptions?: string | ErrorOptions,
+    maybeOptions?: ErrorOptions,
   ) {
-    let normalizedIssues: MIssue[];
+    let normalizedIssues: MongsterIssue[];
     let message: string;
     let options: ErrorOptions | undefined;
 
-    if (typeof issues === "string") {
-      message = issues;
-      normalizedIssues = [{ message: issues }];
-      options = arg2 as ErrorOptions | undefined;
+    if (typeof msgOrIssueOrIssues === "string") {
+      // signature: (code, message, options?)
+      message = msgOrIssueOrIssues;
+      normalizedIssues = [{ message }];
+      options = maybeMessageOrOptions as ErrorOptions | undefined;
     } else {
-      normalizedIssues = Array.isArray(issues) ? issues : [issues];
+      // signature: (code, issue | issues, [message? | options?], [options?])
+      normalizedIssues = Array.isArray(msgOrIssueOrIssues)
+        ? msgOrIssueOrIssues
+        : [msgOrIssueOrIssues];
+
       message =
-        typeof arg2 === "string" ? arg2 : (normalizedIssues[0]?.message ?? "MError occurred");
-      options = (typeof arg2 === "string" ? arg3 : arg2) as ErrorOptions | undefined;
+        typeof maybeMessageOrOptions === "string"
+          ? maybeMessageOrOptions
+          : (normalizedIssues[0]?.message ?? "Mongster error");
+
+      options =
+        typeof maybeMessageOrOptions === "string"
+          ? maybeOptions
+          : (maybeMessageOrOptions as ErrorOptions | undefined);
     }
 
     super(message, options);
 
     Object.setPrototypeOf(this, new.target.prototype);
-    this.name = "MError";
-
+    this.name = new.target.name;
+    this.code = code;
     this.issues = normalizedIssues;
+
+    if (!MongsterError.stackTraces) {
+      this.stack = `${this.name}: ${this.message}`;
+    }
   }
 }
 
-export { MError as MongsterError };
+// ── ── ── ── ── ── ── ── ──
+// ─ Specialized subclasses ─
+// ── ── ── ── ── ── ── ── ──
 
-export class ValidationError extends Error {
-  constructor(message?: string, options?: ErrorOptions) {
-    super(message, options);
-
-    Object.setPrototypeOf(this, new.target.prototype);
-    this.name = "ValidationError";
+/**
+ * Thrown during schema `parse` / `parseForUpdate` when a value
+ * fails type or constraint checks.
+ */
+export class SchemaError extends MongsterError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(MONGSTER_ERROR_CODE.SCHEMA, message, options);
   }
 }
 
-export class DocumentNotFoundError extends Error {
-  constructor(message?: string, options?: ErrorOptions) {
-    super(message, options);
-
-    Object.setPrototypeOf(this, new.target.prototype);
-    this.name = "DocumentNotFoundError";
+/**
+ * Thrown when an update-operator object violates structural or
+ * schema-level rules (e.g. `$inc` on a non-number field).
+ */
+export class ValidationError extends MongsterError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(MONGSTER_ERROR_CODE.VALIDATION, message, options);
   }
 }
 
-export class ConnectionError extends Error {
-  constructor(message?: string, options?: ErrorOptions) {
-    super(message, options);
-
-    Object.setPrototypeOf(this, new.target.prototype);
-    this.name = "ConnectionError";
+/**
+ * Thrown when a collection method receives invalid arguments
+ * (wrong filter type, empty array, etc.).
+ */
+export class QueryError extends MongsterError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(MONGSTER_ERROR_CODE.QUERY, message, options);
   }
 }
 
-export class TransactionError extends Error {
-  constructor(message?: string, options?: ErrorOptions) {
-    super(message, options);
-
-    Object.setPrototypeOf(this, new.target.prototype);
-    this.name = "TransactionError";
+/**
+ * Thrown when the client cannot connect to (or loses connection with)
+ * the MongoDB server.
+ */
+export class ConnectionError extends MongsterError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(MONGSTER_ERROR_CODE.CONNECTION, message, options);
   }
 }
 
-export class IndexSyncError extends Error {
-  constructor(message?: string, options?: ErrorOptions) {
-    super(message, options);
-
-    Object.setPrototypeOf(this, new.target.prototype);
-    this.name = "IndexSyncError";
+/**
+ * Thrown when a transaction callback fails or when session
+ * management encounters an error.
+ */
+export class TransactionError extends MongsterError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(MONGSTER_ERROR_CODE.TRANSACTION, message, options);
   }
 }
 
-export class CollectionError extends Error {
-  constructor(message?: string, options?: ErrorOptions) {
-    super(message, options);
-
-    Object.setPrototypeOf(this, new.target.prototype);
-    this.name = "CollectionError";
+/**
+ * Thrown when automatic index synchronization fails.
+ */
+export class IndexSyncError extends MongsterError {
+  constructor(message: string, options?: ErrorOptions) {
+    super("INDEX_SYNC_ERROR", message, options);
   }
 }

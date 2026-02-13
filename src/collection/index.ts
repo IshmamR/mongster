@@ -31,6 +31,7 @@ import type {
   WithoutId,
 } from "mongodb";
 import type { MongsterClient } from "../client";
+import { IndexSyncError, QueryError } from "../error";
 import { FindQuery } from "../queries/FindQuery";
 import type { MongsterSchema } from "../schema/schema";
 import type { MongsterFilter, MongsterUpdateFilter } from "../types/types.filter";
@@ -38,42 +39,93 @@ import type { SyncIndexResponse } from "../types/types.model";
 import type { AllFilterKeys } from "../types/types.query";
 import type { InferSchemaInputType, InferSchemaType } from "../types/types.schema";
 
-function normalizeIndex(idx: any): IndexDescription {
-  if (!idx.key) throw new Error("Normalization error: No key in index object");
+const propertiesToCopyForNormalization = [
+  "unique",
+  "sparse",
+  "background",
+  "expireAfterSeconds",
+  "weights",
+  "default_language",
+  "language_override",
+  "hidden",
+  "storageEngine",
+  "version",
+  "textIndexVersion",
+  "bits",
+  "min",
+  "max",
+  "bucketSize",
+  "wildcardProjection",
+  "partialFilterExpression",
+  "2dsphereIndexVersion",
+] as const satisfies (keyof IndexDescription)[];
+
+/**
+ * normalizes an IndexDescription by copying only the supported/known
+ * index properties and ensuring a stable shape for hashing/comparison.
+ */
+function normalizeIndex(idx: IndexDescription): IndexDescription {
+  if (!idx.key) throw new IndexSyncError("Normalization error: No key in index object");
+
   const normalized: IndexDescription = { key: idx.key };
-
-  if (idx.unique !== undefined) normalized.unique = idx.unique;
-  if (idx.sparse !== undefined) normalized.sparse = idx.sparse;
-  if (idx.background !== undefined) normalized.background = idx.background;
-  if (idx.expireAfterSeconds !== undefined) normalized.expireAfterSeconds = idx.expireAfterSeconds;
-  if (idx.weights !== undefined) normalized.weights = idx.weights;
-  if (idx.default_language !== undefined) normalized.default_language = idx.default_language;
-  if (idx.language_override !== undefined) normalized.language_override = idx.language_override;
-  if (idx.hidden !== undefined) normalized.hidden = idx.hidden;
-  if (idx.storageEngine !== undefined) normalized.storageEngine = idx.storageEngine;
-  if (idx.version !== undefined) normalized.version = idx.version;
-  if (idx.textIndexVersion !== undefined) normalized.textIndexVersion = idx.textIndexVersion;
-  if (idx.bits !== undefined) normalized.bits = idx.bits;
-  if (idx.min !== undefined) normalized.min = idx.min;
-  if (idx.max !== undefined) normalized.max = idx.max;
-  if (idx.bucketSize !== undefined) normalized.bucketSize = idx.bucketSize;
-  if (idx.wildcardProjection !== undefined) normalized.wildcardProjection = idx.wildcardProjection;
-  if (idx.partialFilterExpression !== undefined) {
-    normalized.partialFilterExpression = idx.partialFilterExpression;
+  for (const prop of propertiesToCopyForNormalization) {
+    if (typeof idx[prop] !== "undefined") {
+      normalized[prop] = idx[prop] as never; // needed never to stop TS from screaming T_T
+    }
   }
-  if (idx["2dsphereIndexVersion"] !== undefined) {
-    normalized["2dsphereIndexVersion"] = idx["2dsphereIndexVersion"];
-  }
-
   return normalized;
 }
 
-function hashIndex(idx: IndexDescription) {
-  return JSON.stringify(idx);
+/**
+ * creates a deterministic, human-readable hash for an index description.
+ *
+ * Example
+ * ```ts
+ * // input
+ * const idx = {
+ *   key: { a: 1, b: -1 },
+ *   unique: true,
+ *   partialFilterExpression: { status: "active" },
+ * } as IndexDescription;
+ *
+ * // output (string)
+ * // '{"a":1,"b":-1}|unique:true|partialFilterExpression:{"status":"active"}'
+ * const h = hashIndex(idx);
+ * ```
+ */
+function hashIndex(idx: IndexDescription): string {
+  let hash = JSON.stringify(idx.key);
+  for (const prop of propertiesToCopyForNormalization) {
+    const val = idx[prop];
+    if (typeof val !== "undefined") {
+      hash += `|${prop}:${typeof val === "object" ? JSON.stringify(val) : val}`;
+    }
+  }
+  return hash;
 }
 
-interface SyncIndexProp {
+/** MongoDB error code returned when a namespace (collection) does not exist. */
+const MONGO_ERROR_NS_NOT_FOUND = 26;
+
+/**
+ * Options for `MongsterModel#syncIndexes`.
+ *
+ * - `force`: reset the internal "indexes synced" state before running sync.
+ *   Useful for testing or when you want to re-apply schema indexes even if they
+ *   were previously synced.
+ * - `autoDrop`: when true (default) remove DB indexes that are not present in
+ *   the schema. Set to `false` to only create missing indexes and preserve any
+ *   manual indexes in the database.
+ *
+ * Example:
+ * ```ts
+ * model.syncIndexes({ force: true, autoDrop: false });
+ * ```
+ */
+export interface SyncIndexProp {
+  /** Reset internal sync state and re-run index sync */
   force?: boolean;
+  /** Whether to auto-drop DB indexes not present in the schema (default: true) */
   autoDrop?: boolean;
 }
 
@@ -93,6 +145,7 @@ export class MongsterModel<
   #collectionName: CN;
 
   #indexSynced = false;
+  #indexSyncPromise: Promise<SyncIndexResponse> | null = null;
 
   constructor(connection: MongsterClient, collectionName: CN, schema: SC) {
     this.#collectionName = collectionName;
@@ -115,11 +168,27 @@ export class MongsterModel<
   async syncIndexes(props?: SyncIndexProp): Promise<SyncIndexResponse> {
     const { force = false, autoDrop = true } = props ?? {};
 
-    if (force) this.#indexSynced = false;
+    if (force) {
+      this.#indexSynced = false;
+      this.#indexSyncPromise = null;
+    }
     if (!this.#connection.getOptions().autoIndex || this.#indexSynced) {
       return { created: 0, dropped: 0, unchanged: 0 };
     }
 
+    // prevent concurrent sync attempts by reusing in-flight promise
+    if (this.#indexSyncPromise) return this.#indexSyncPromise;
+    this.#indexSyncPromise = this.#synchronizeIndexes(autoDrop);
+
+    try {
+      return await this.#indexSyncPromise;
+    } catch (err) {
+      this.#indexSyncPromise = null;
+      throw err;
+    }
+  }
+
+  async #synchronizeIndexes(autoDrop: boolean): Promise<SyncIndexResponse> {
     const collection = this.getCollection();
 
     // get indexes from schema
@@ -180,7 +249,7 @@ export class MongsterModel<
         unchanged: unchangedCount,
       };
     } catch (err: any) {
-      if (err.code === 26) {
+      if (err.code === MONGO_ERROR_NS_NOT_FOUND) {
         // collection doesn't exist yet
 
         if (!schemaIndexes.length) return { created: 0, dropped: 0, unchanged: 0 };
@@ -205,10 +274,10 @@ export class MongsterModel<
     options?: InsertOneOptions,
   ): Promise<InsertOneResult<OT>> {
     if (!input || typeof input !== "object") {
-      throw new Error("insertOne: input must be an object");
+      throw new QueryError("insertOne: input must be an object");
     }
     if (Array.isArray(input)) {
-      throw new Error("insertOne: input cannot be an array, use insertMany instead");
+      throw new QueryError("insertOne: input cannot be an array, use insertMany instead");
     }
 
     if (!this.#indexSynced) await this.syncIndexes();
@@ -227,10 +296,10 @@ export class MongsterModel<
     options?: BulkWriteOptions,
   ): Promise<InsertManyResult<OT>> {
     if (!Array.isArray(inputArr)) {
-      throw new Error("insertMany: input must be an array");
+      throw new QueryError("insertMany: input must be an array");
     }
     if (inputArr.length === 0) {
-      throw new Error("insertMany: input array cannot be empty");
+      throw new QueryError("insertMany: input array cannot be empty");
     }
 
     if (!this.#indexSynced) await this.syncIndexes();
@@ -241,10 +310,10 @@ export class MongsterModel<
     for (let i = 0; i < inputArr.length; i++) {
       const input = inputArr[i];
       if (!input || typeof input !== "object") {
-        throw new Error(`insertMany: input at index ${i} must be an object`);
+        throw new QueryError(`insertMany: input at index ${i} must be an object`);
       }
       if (Array.isArray(input)) {
-        throw new Error(`insertMany: input at index ${i} cannot be an array`);
+        throw new QueryError(`insertMany: input at index ${i} cannot be an array`);
       }
       const parsedInput = this.#schema.parse(input) as OptionalUnlessRequiredId<OT>;
       parsedInputArr.push(parsedInput);
@@ -262,10 +331,10 @@ export class MongsterModel<
     options?: InsertOneOptions,
   ): Promise<OT | null> {
     if (!input || typeof input !== "object") {
-      throw new Error("createOne: input must be an object");
+      throw new QueryError("createOne: input must be an object");
     }
     if (Array.isArray(input)) {
-      throw new Error("createOne: input cannot be an array, use createMany instead");
+      throw new QueryError("createOne: input cannot be an array, use createMany instead");
     }
 
     if (!this.#indexSynced) await this.syncIndexes();
@@ -284,10 +353,10 @@ export class MongsterModel<
     options?: BulkWriteOptions,
   ): Promise<OT[]> {
     if (!Array.isArray(inputArr)) {
-      throw new Error("createMany: input must be an array");
+      throw new QueryError("createMany: input must be an array");
     }
     if (inputArr.length === 0) {
-      throw new Error("createMany: input array cannot be empty");
+      throw new QueryError("createMany: input array cannot be empty");
     }
 
     if (!this.#indexSynced) await this.syncIndexes();
@@ -298,10 +367,10 @@ export class MongsterModel<
     for (let i = 0; i < inputArr.length; i++) {
       const input = inputArr[i];
       if (!input || typeof input !== "object") {
-        throw new Error(`createMany: input at index ${i} must be an object`);
+        throw new QueryError(`createMany: input at index ${i} must be an object`);
       }
       if (Array.isArray(input)) {
-        throw new Error(`createMany: input at index ${i} cannot be an array`);
+        throw new QueryError(`createMany: input at index ${i} cannot be an array`);
       }
       const parsedInput = this.#schema.parse(input) as OptionalUnlessRequiredId<OT>;
       parsedInputArr.push(parsedInput);
@@ -332,10 +401,10 @@ export class MongsterModel<
 
   find(filter: MongsterFilter<OT> = {}, options?: FindOptions & Abortable): FindQuery<T, OT> {
     if (filter !== null && filter !== undefined && typeof filter !== "object") {
-      throw new Error("find: filter must be an object");
+      throw new QueryError("find: filter must be an object");
     }
     if (Array.isArray(filter)) {
-      throw new Error("find: filter cannot be an array");
+      throw new QueryError("find: filter cannot be an array");
     }
 
     const collection = this.getCollection();
@@ -349,10 +418,10 @@ export class MongsterModel<
     options?: Omit<FindOneOptions, "timeoutMode"> & Abortable,
   ): Promise<OT | null> {
     if (filter !== null && filter !== undefined && typeof filter !== "object") {
-      throw new Error("findOne: filter must be an object");
+      throw new QueryError("findOne: filter must be an object");
     }
     if (Array.isArray(filter)) {
-      throw new Error("findOne: filter cannot be an array");
+      throw new QueryError("findOne: filter cannot be an array");
     }
 
     const collection = this.getCollection();
@@ -367,13 +436,13 @@ export class MongsterModel<
     options?: DistinctOptions,
   ): Promise<Flatten<WithId<OT>[string]>[]> {
     if (!key || typeof key !== "string") {
-      throw new Error("distinct: key must be a non-empty string");
+      throw new QueryError("distinct: key must be a non-empty string");
     }
     if (filter !== null && filter !== undefined && typeof filter !== "object") {
-      throw new Error("distinct: filter must be an object");
+      throw new QueryError("distinct: filter must be an object");
     }
     if (Array.isArray(filter)) {
-      throw new Error("distinct: filter cannot be an array");
+      throw new QueryError("distinct: filter cannot be an array");
     }
 
     const collection = this.getCollection();
@@ -392,16 +461,16 @@ export class MongsterModel<
     options?: UpdateOptions & { sort?: Sort },
   ): Promise<UpdateResult<OT>> {
     if (filter !== null && filter !== undefined && typeof filter !== "object") {
-      throw new Error("updateOne: filter must be an object");
+      throw new QueryError("updateOne: filter must be an object");
     }
     if (Array.isArray(filter)) {
-      throw new Error("updateOne: filter cannot be an array");
+      throw new QueryError("updateOne: filter cannot be an array");
     }
     if (!updateData || typeof updateData !== "object") {
-      throw new Error("updateOne: updateData must be an object");
+      throw new QueryError("updateOne: updateData must be an object");
     }
     if (Array.isArray(updateData)) {
-      throw new Error("updateOne: updateData cannot be an array");
+      throw new QueryError("updateOne: updateData cannot be an array");
     }
 
     if (options?.upsert && !this.#indexSynced) await this.syncIndexes();
@@ -424,16 +493,16 @@ export class MongsterModel<
     options?: UpdateOptions & { sort?: Sort },
   ): Promise<UpdateResult<OT>> {
     if (filter !== null && filter !== undefined && typeof filter !== "object") {
-      throw new Error("updateMany: filter must be an object");
+      throw new QueryError("updateMany: filter must be an object");
     }
     if (Array.isArray(filter)) {
-      throw new Error("updateMany: filter cannot be an array");
+      throw new QueryError("updateMany: filter cannot be an array");
     }
     if (!updateData || typeof updateData !== "object") {
-      throw new Error("updateMany: updateData must be an object");
+      throw new QueryError("updateMany: updateData must be an object");
     }
     if (Array.isArray(updateData)) {
-      throw new Error("updateMany: updateData cannot be an array");
+      throw new QueryError("updateMany: updateData cannot be an array");
     }
 
     if (options?.upsert && !this.#indexSynced) await this.syncIndexes();
@@ -456,16 +525,16 @@ export class MongsterModel<
     options?: FindOneAndUpdateOptions & { includeResultMetadata: true },
   ): Promise<WithId<OT> | null> {
     if (filter !== null && filter !== undefined && typeof filter !== "object") {
-      throw new Error("findOneAndUpdate: filter must be an object");
+      throw new QueryError("findOneAndUpdate: filter must be an object");
     }
     if (Array.isArray(filter)) {
-      throw new Error("findOneAndUpdate: filter cannot be an array");
+      throw new QueryError("findOneAndUpdate: filter cannot be an array");
     }
     if (!updateData || typeof updateData !== "object") {
-      throw new Error("findOneAndUpdate: updateData must be an object");
+      throw new QueryError("findOneAndUpdate: updateData must be an object");
     }
     if (Array.isArray(updateData)) {
-      throw new Error("findOneAndUpdate: updateData cannot be an array");
+      throw new QueryError("findOneAndUpdate: updateData cannot be an array");
     }
 
     if (options?.upsert && !this.#indexSynced) await this.syncIndexes();
@@ -488,16 +557,16 @@ export class MongsterModel<
     options?: ReplaceOptions,
   ): Promise<UpdateResult<OT>> {
     if (filter !== null && filter !== undefined && typeof filter !== "object") {
-      throw new Error("replaceOne: filter must be an object");
+      throw new QueryError("replaceOne: filter must be an object");
     }
     if (Array.isArray(filter)) {
-      throw new Error("replaceOne: filter cannot be an array");
+      throw new QueryError("replaceOne: filter cannot be an array");
     }
     if (!replacement || typeof replacement !== "object") {
-      throw new Error("replaceOne: replacement must be an object");
+      throw new QueryError("replaceOne: replacement must be an object");
     }
     if (Array.isArray(replacement)) {
-      throw new Error("replaceOne: replacement cannot be an array");
+      throw new QueryError("replaceOne: replacement cannot be an array");
     }
 
     if (options?.upsert && !this.#indexSynced) await this.syncIndexes();
@@ -515,16 +584,16 @@ export class MongsterModel<
     options?: FindOneAndReplaceOptions & { includeResultMetadata: true },
   ): Promise<WithId<OT> | null> {
     if (filter !== null && filter !== undefined && typeof filter !== "object") {
-      throw new Error("findOneAndReplace: filter must be an object");
+      throw new QueryError("findOneAndReplace: filter must be an object");
     }
     if (Array.isArray(filter)) {
-      throw new Error("findOneAndReplace: filter cannot be an array");
+      throw new QueryError("findOneAndReplace: filter cannot be an array");
     }
     if (!replacement || typeof replacement !== "object") {
-      throw new Error("findOneAndReplace: replacement must be an object");
+      throw new QueryError("findOneAndReplace: replacement must be an object");
     }
     if (Array.isArray(replacement)) {
-      throw new Error("findOneAndReplace: replacement cannot be an array");
+      throw new QueryError("findOneAndReplace: replacement cannot be an array");
     }
 
     if (options?.upsert && !this.#indexSynced) await this.syncIndexes();
@@ -546,16 +615,16 @@ export class MongsterModel<
     options?: UpdateOptions & { sort?: Sort },
   ): Promise<UpdateResult<OT>> {
     if (filter !== null && filter !== undefined && typeof filter !== "object") {
-      throw new Error("upsertOne: filter must be an object");
+      throw new QueryError("upsertOne: filter must be an object");
     }
     if (Array.isArray(filter)) {
-      throw new Error("upsertOne: filter cannot be an array");
+      throw new QueryError("upsertOne: filter cannot be an array");
     }
     if (!updateData || typeof updateData !== "object") {
-      throw new Error("upsertOne: updateData must be an object");
+      throw new QueryError("upsertOne: updateData must be an object");
     }
     if (Array.isArray(updateData)) {
-      throw new Error("upsertOne: updateData cannot be an array");
+      throw new QueryError("upsertOne: updateData cannot be an array");
     }
 
     if (!this.#indexSynced) await this.syncIndexes();
@@ -563,20 +632,22 @@ export class MongsterModel<
     const collection = this.getCollection();
     const parsedData = this.#schema.parse(updateData);
 
-    const result = await collection.updateOne(
-      filter as Filter<OT>,
-      parsedData as UpdateFilter<OT>,
-      { ...options, upsert: true },
-    );
+    const { _id, ...dataWithoutId } = parsedData as Record<string, unknown>;
+    const updateFilter: UpdateFilter<OT> = { $set: dataWithoutId } as UpdateFilter<OT>;
+
+    const result = await collection.updateOne(filter as Filter<OT>, updateFilter, {
+      ...options,
+      upsert: true,
+    });
     return result;
   }
 
   async deleteOne(filter: MongsterFilter<OT>, options?: DeleteOptions): Promise<DeleteResult> {
     if (filter !== null && filter !== undefined && typeof filter !== "object") {
-      throw new Error("deleteOne: filter must be an object");
+      throw new QueryError("deleteOne: filter must be an object");
     }
     if (Array.isArray(filter)) {
-      throw new Error("deleteOne: filter cannot be an array");
+      throw new QueryError("deleteOne: filter cannot be an array");
     }
 
     const collection = this.getCollection();
@@ -587,10 +658,10 @@ export class MongsterModel<
 
   async deleteMany(filter: MongsterFilter<OT>, options?: DeleteOptions): Promise<DeleteResult> {
     if (filter !== null && filter !== undefined && typeof filter !== "object") {
-      throw new Error("deleteMany: filter must be an object");
+      throw new QueryError("deleteMany: filter must be an object");
     }
     if (Array.isArray(filter)) {
-      throw new Error("deleteMany: filter cannot be an array");
+      throw new QueryError("deleteMany: filter cannot be an array");
     }
 
     const collection = this.getCollection();
@@ -604,10 +675,10 @@ export class MongsterModel<
     options?: FindOneAndDeleteOptions & { includeResultMetadata: true },
   ): Promise<WithId<OT> | null> {
     if (filter !== null && filter !== undefined && typeof filter !== "object") {
-      throw new Error("findOneAndDelete: filter must be an object");
+      throw new QueryError("findOneAndDelete: filter must be an object");
     }
     if (Array.isArray(filter)) {
-      throw new Error("findOneAndDelete: filter cannot be an array");
+      throw new QueryError("findOneAndDelete: filter cannot be an array");
     }
 
     const collection = this.getCollection();
@@ -621,7 +692,7 @@ export class MongsterModel<
     options?: AggregateOptions & Abortable,
   ): Promise<ReturnType> {
     if (pipeline !== null && pipeline !== undefined && !Array.isArray(pipeline)) {
-      throw new Error("aggregateRaw: pipeline must be an array");
+      throw new QueryError("aggregateRaw: pipeline must be an array");
     }
 
     const collection = this.getCollection();

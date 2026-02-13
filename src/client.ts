@@ -6,6 +6,7 @@ import {
   type MongoClientOptions,
 } from "mongodb";
 import { MongsterModel } from "./collection";
+import { ConnectionError } from "./error";
 import type { MongsterSchema } from "./schema/schema";
 import { createTransactionManager } from "./transaction";
 import type { MongsterTransaction } from "./types/types.transaction";
@@ -59,7 +60,7 @@ export class MongsterClient {
 
   async connect(uri?: string, options?: MongsterClientOptions): Promise<void> {
     this.#uri = typeof uri !== "undefined" ? uri : this.#uri;
-    if (!this.#uri) throw new Error("No database URI was provided");
+    if (!this.#uri) throw new ConnectionError("No database URI was provided");
 
     this.#options = { ...this.#options, ...options };
     const {
@@ -101,7 +102,7 @@ export class MongsterClient {
     } while (!this.#connected && retryAttempt < maxAttempts);
 
     if (lastErr instanceof Error) throw lastErr;
-    throw new Error("Failed to connect to database");
+    throw new ConnectionError("Failed to connect to database");
   }
 
   async syncIndexes() {
@@ -131,12 +132,12 @@ export class MongsterClient {
   }
 
   getClient(): MongoClient {
-    if (!this.#client) throw new Error("Not connected");
+    if (!this.#client) throw new ConnectionError("Not connected");
     return this.#client;
   }
 
   getDb(name?: string): Db {
-    if (!this.#client) throw new Error("DB not connected");
+    if (!this.#client) throw new ConnectionError("DB not connected");
     return this.#client.db(name ?? this.#dbName ?? "test");
   }
 

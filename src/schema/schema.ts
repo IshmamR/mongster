@@ -1,5 +1,5 @@
 import type { IndexDescription } from "mongodb";
-import { MError, ValidationError } from "../error";
+import { SchemaError, ValidationError } from "../error";
 import { updateKeysArray } from "../helpers/constants";
 import { processOperators, unwrapSchema, validateUpdateRecord } from "../helpers/schema";
 import type { MongsterUpdateFilter } from "../types/types.filter";
@@ -43,7 +43,8 @@ export class MongsterSchema<
 
   constructor(shape: T) {
     for (const [_, rawSchema] of Object.entries(shape)) {
-      if (rawSchema instanceof MongsterSchema) throw new Error("MongsterSchema cannot be embedded");
+      if (rawSchema instanceof MongsterSchema)
+        throw new SchemaError("MongsterSchema cannot be embedded");
     }
 
     super();
@@ -78,8 +79,8 @@ export class MongsterSchema<
   }
 
   parse(v: unknown): $T {
-    if (typeof v !== "object" || v === null) throw new MError("Expected an object");
-    if (Array.isArray(v)) throw new MError("Expected an object, but received an array");
+    if (typeof v !== "object" || v === null) throw new SchemaError("Expected an object");
+    if (Array.isArray(v)) throw new SchemaError("Expected an object, but received an array");
 
     const out: Record<string, unknown> = {};
 
@@ -91,7 +92,7 @@ export class MongsterSchema<
       try {
         out[k] = s.parse((v as any)[k]);
       } catch (err) {
-        throw new MError(`${k}: ${(err as MError).message}`, {
+        throw new SchemaError(`${k}: ${(err as SchemaError).message}`, {
           cause: err,
         });
       }
@@ -120,8 +121,10 @@ export class MongsterSchema<
     // Otherwise, treat as regular parse for update (partial validation)
     if (updateObj === undefined) return undefined;
 
-    if (typeof updateObj !== "object" || updateObj === null) throw new MError("Expected an object");
-    if (Array.isArray(updateObj)) throw new MError("Expected an object, but received an array");
+    if (typeof updateObj !== "object" || updateObj === null)
+      throw new SchemaError("Expected an object");
+    if (Array.isArray(updateObj))
+      throw new SchemaError("Expected an object, but received an array");
 
     const out: Record<string, unknown> = {};
     for (const [k, s] of Object.entries(this.#shape)) {
@@ -132,7 +135,7 @@ export class MongsterSchema<
           out[k] = parsed;
         }
       } catch (err) {
-        throw new MError(`${k}: ${(err as MError).message}`, {
+        throw new SchemaError(`${k}: ${(err as SchemaError).message}`, {
           cause: err,
         });
       }

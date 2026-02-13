@@ -1,4 +1,5 @@
 import type { FindCursor, Sort } from "mongodb";
+import { QueryError } from "../error";
 import type {
   AllProjKeys,
   ProjectionFromExclusionKeys,
@@ -31,7 +32,7 @@ export class FindQuery<T, OT> {
 
   limit(n: number) {
     if (typeof n !== "number" || !Number.isInteger(n) || n <= 0) {
-      throw new Error("Limit must be a positive integer");
+      throw new QueryError("Limit must be a positive integer");
     }
     this.#cursor = this.#cursor.limit(n);
     return this;
@@ -39,7 +40,7 @@ export class FindQuery<T, OT> {
 
   skip(n: number) {
     if (typeof n !== "number" || !Number.isInteger(n) || n <= 0) {
-      throw new Error("Skip must be a positive integer");
+      throw new QueryError("Skip must be a positive integer");
     }
     this.#cursor = this.#cursor.skip(n);
     return this;

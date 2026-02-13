@@ -1,5 +1,5 @@
 import { Binary, Decimal128, ObjectId } from "mongodb";
-import { MError } from "../error";
+import { SchemaError } from "../error";
 import { MongsterSchemaInternal, WithDefaultSchema } from "./base";
 
 interface ObjectIdChecks {
@@ -46,7 +46,7 @@ export class ObjectIdSchema extends MongsterSchemaInternal<ObjectId, ObjectId> {
       if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
-    if (!(v instanceof ObjectId)) throw new MError(`Expected an ObjectId`);
+    if (!(v instanceof ObjectId)) throw new SchemaError(`Expected an ObjectId`);
     return v;
   }
 
@@ -97,7 +97,7 @@ export class Decimal128Schema extends MongsterSchemaInternal<Decimal128, Decimal
       if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
-    if (!(v instanceof Decimal128)) throw new MError("Expected a Decimal128");
+    if (!(v instanceof Decimal128)) throw new SchemaError("Expected a Decimal128");
     return v;
   }
 
@@ -159,7 +159,7 @@ export class BinarySchema extends MongsterSchemaInternal<Binary, Binary> {
   }
 
   bsonSubType(b: BSONSubtype): BinarySchema {
-    if (!isValidBsonSubtype(b)) throw new MError(`Invalid BSON subtype argument: ${b}`);
+    if (!isValidBsonSubtype(b)) throw new SchemaError(`Invalid BSON subtype argument: ${b}`);
     return new BinarySchema({ ...this.#checks, subType: b });
   }
 
@@ -184,7 +184,7 @@ export class BinarySchema extends MongsterSchemaInternal<Binary, Binary> {
     if (Array.isArray(v) && v.every((x) => Number.isInteger(x) && x >= 0 && x <= 255)) {
       return Buffer.from(v as number[]);
     }
-    throw new MError("Expected a (Binary | Buffer)");
+    throw new SchemaError("Expected a (Binary | Buffer)");
   }
 
   parse(v: unknown): Binary {
@@ -196,15 +196,15 @@ export class BinarySchema extends MongsterSchemaInternal<Binary, Binary> {
     const buf = this.#toBuffer(v);
     const len = buf.length;
     if (typeof this.#checks.min !== "undefined" && len < this.#checks.min) {
-      throw new MError(`Buffer is too short (min ${this.#checks.min})`);
+      throw new SchemaError(`Buffer is too short (min ${this.#checks.min})`);
     }
     if (typeof this.#checks.max !== "undefined" && len > this.#checks.max) {
-      throw new MError(`Buffer is too long (max ${this.#checks.max})`);
+      throw new SchemaError(`Buffer is too long (max ${this.#checks.max})`);
     }
 
     if (v instanceof Binary) {
       if (v.sub_type !== this.#checks.subType) {
-        throw new MError(
+        throw new SchemaError(
           `Invalid Binary subtype: expected ${this.#checks.subType}, got ${v.sub_type}`,
         );
       }

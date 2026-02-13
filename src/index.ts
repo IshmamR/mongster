@@ -4,7 +4,16 @@ import type { MongsterSchemaBase } from "./schema/base";
 import type { MongsterSchema } from "./schema/schema";
 import type { InferSchemaInputType, InferSchemaType } from "./types/types.schema";
 
-export { MError } from "./error";
+export type { MongsterErrorCode, MongsterIssue } from "./error";
+export {
+  ConnectionError,
+  IndexSyncError,
+  MongsterError,
+  QueryError,
+  SchemaError,
+  TransactionError,
+  ValidationError,
+} from "./error";
 export type { MongsterTransaction, MongsterTransactionContext } from "./types/types.transaction";
 
 export const M = new MongsterSchemaBuilder();

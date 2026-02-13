@@ -1,5 +1,5 @@
 import type { IndexDescription } from "mongodb";
-import { MError } from "../error";
+import { SchemaError } from "../error";
 import type { AllFilterKeys } from "../types/types.query";
 import type {
   MongsterIndexDirection,
@@ -36,7 +36,8 @@ export class ObjectSchema<
 
   constructor(shape: T, checks: ObjectChecks<$T> = {}) {
     for (const [_, rawSchema] of Object.entries(shape)) {
-      if (rawSchema instanceof MongsterSchema) throw new Error("MongsterSchema cannot be embedded");
+      if (rawSchema instanceof MongsterSchema)
+        throw new SchemaError("MongsterSchema cannot be embedded");
     }
 
     super();
@@ -99,15 +100,15 @@ export class ObjectSchema<
       if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
-    if (typeof v !== "object") throw new MError("Expected an object");
-    if (Array.isArray(v)) throw new MError("Expected an object, but received an array");
+    if (typeof v !== "object") throw new SchemaError("Expected an object");
+    if (Array.isArray(v)) throw new SchemaError("Expected an object, but received an array");
 
     const out: Record<string, unknown> = {};
     for (const [k, s] of Object.entries(this.#shape)) {
       try {
         out[k] = (s as MongsterSchemaInternal<any>).parse((v as any)[k]);
       } catch (err) {
-        throw new MError(`${k}: ${(err as MError).message}`, {
+        throw new SchemaError(`${k}: ${(err as SchemaError).message}`, {
           cause: err,
         });
       }
@@ -119,8 +120,8 @@ export class ObjectSchema<
   parseForUpdate(v: unknown): $T | undefined {
     if (v === undefined) return undefined;
 
-    if (typeof v !== "object") throw new MError("Expected an object");
-    if (Array.isArray(v)) throw new MError("Expected an object, but received an array");
+    if (typeof v !== "object") throw new SchemaError("Expected an object");
+    if (Array.isArray(v)) throw new SchemaError("Expected an object, but received an array");
 
     const out: Record<string, unknown> = {};
     for (const [k, s] of Object.entries(this.#shape)) {
@@ -131,7 +132,7 @@ export class ObjectSchema<
           out[k] = parsed;
         }
       } catch (err) {
-        throw new MError(`${k}: ${(err as MError).message}`, {
+        throw new SchemaError(`${k}: ${(err as SchemaError).message}`, {
           cause: err,
         });
       }
@@ -208,7 +209,7 @@ export class UnionSchema<
     }
 
     if (!isValid) {
-      throw new MError(
+      throw new SchemaError(
         `Expected one of: ${this.#shapes.map((shape) => shape.constructor.name).join(" | ")}`,
       );
     }
@@ -231,7 +232,7 @@ export class UnionSchema<
     }
 
     if (!isValid) {
-      throw new MError(
+      throw new SchemaError(
         `Expected one of: ${this.#shapes.map((shape) => shape.constructor.name).join(" | ")}`,
       );
     }
@@ -297,9 +298,9 @@ export class TupleSchema<
       if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
-    if (!Array.isArray(v)) throw new MError("Expected a tuple (must be an array)");
+    if (!Array.isArray(v)) throw new SchemaError("Expected a tuple (must be an array)");
     if (v.length !== this.#shapes.length) {
-      throw new MError(
+      throw new SchemaError(
         `Expected tuple of length ${this.#shapes.length}, received of length ${v.length}`,
       );
     }
@@ -307,12 +308,12 @@ export class TupleSchema<
     const out: unknown[] = [];
     for (let i = 0; i < this.#shapes.length; i++) {
       const shape = this.#shapes[i];
-      if (!shape) throw new MError(`Invalid schema shape`);
+      if (!shape) throw new SchemaError(`Invalid schema shape`);
 
       try {
         out[i] = shape.parse(v[i]);
       } catch (err) {
-        throw new MError(`[${i}] ${(err as MError).message}`, { cause: err });
+        throw new SchemaError(`[${i}] ${(err as SchemaError).message}`, { cause: err });
       }
     }
     return out as $T;
@@ -321,9 +322,9 @@ export class TupleSchema<
   parseForUpdate(v: unknown): $T | undefined {
     if (v === undefined) return undefined;
 
-    if (!Array.isArray(v)) throw new MError("Expected a tuple (must be an array)");
+    if (!Array.isArray(v)) throw new SchemaError("Expected a tuple (must be an array)");
     if (v.length !== this.#shapes.length) {
-      throw new MError(
+      throw new SchemaError(
         `Expected tuple of length ${this.#shapes.length}, received of length ${v.length}`,
       );
     }
@@ -331,7 +332,7 @@ export class TupleSchema<
     const out: unknown[] = [];
     for (let i = 0; i < this.#shapes.length; i++) {
       const shape = this.#shapes[i];
-      if (!shape) throw new MError(`Invalid schema shape`);
+      if (!shape) throw new SchemaError(`Invalid schema shape`);
 
       try {
         const parsed = shape.parseForUpdate(v[i]);
@@ -342,7 +343,7 @@ export class TupleSchema<
           out[i] = parsed;
         }
       } catch (err) {
-        throw new MError(`[${i}] ${(err as MError).message}`, { cause: err });
+        throw new SchemaError(`[${i}] ${(err as SchemaError).message}`, { cause: err });
       }
     }
     return out as $T;

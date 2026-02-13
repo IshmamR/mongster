@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import { Binary, Decimal128, ObjectId } from "mongodb";
-import { MError } from "../src/error";
+import { SchemaError } from "../src/error";
 import { MongsterSchemaBuilder } from "../src/schema";
 import type { InferSchemaInputType, InferSchemaType } from "../src/types/types.schema";
 
@@ -1463,14 +1463,14 @@ describe("Custom Validation and Error Handling", () => {
       ).toThrow("users: [1] contacts: [0] type: Value must be one of [email, phone]");
     });
 
-    test("should handle MError instances", () => {
+    test("should handle SchemaError instances", () => {
       const schema = M.string();
 
       try {
         schema.parse(123);
       } catch (error) {
-        expect(error).toBeInstanceOf(MError);
-        expect((error as MError).message).toBe("Expected a string");
+        expect(error).toBeInstanceOf(SchemaError);
+        expect((error as SchemaError).message).toBe("Expected a string");
       }
     });
 

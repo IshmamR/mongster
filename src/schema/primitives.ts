@@ -1,4 +1,4 @@
-import { MError } from "../error";
+import { SchemaError } from "../error";
 import type { SchemaMeta } from "../types/types.schema";
 import { MongsterSchemaInternal, WithDefaultSchema } from "./base";
 
@@ -63,20 +63,20 @@ export class NumberSchema<TP extends number = number> extends MongsterSchemaInte
 
     if (typeof v !== "number") {
       if (typeof v === "undefined") {
-        throw new MError("Expected a number, received undefined");
+        throw new SchemaError("Expected a number, received undefined");
       }
-      throw new MError("Expected a number");
+      throw new SchemaError("Expected a number");
     }
 
     if (typeof this.#checks.min !== "undefined" && v < this.#checks.min) {
-      throw new MError(`Value must be greater than or equal to ${this.#checks.min}`);
+      throw new SchemaError(`Value must be greater than or equal to ${this.#checks.min}`);
     }
     if (typeof this.#checks.max !== "undefined" && v > this.#checks.max) {
-      throw new MError(`Value must be less than or equal to ${this.#checks.max}`);
+      throw new SchemaError(`Value must be less than or equal to ${this.#checks.max}`);
     }
 
     if (typeof this.#checks.enum !== "undefined" && !this.#checks.enum.includes(v)) {
-      throw new MError(`Value must be one of [${this.#checks.enum.join(", ")}]`);
+      throw new SchemaError(`Value must be one of [${this.#checks.enum.join(", ")}]`);
     }
 
     return v as TP;
@@ -154,25 +154,27 @@ export class StringSchema<TP extends string = string> extends MongsterSchemaInte
 
     if (typeof v !== "string") {
       if (typeof v === "undefined") {
-        throw new MError("Expected a string, but received undefined. Field is required.");
+        throw new SchemaError("Expected a string, but received undefined. Field is required.");
       }
-      throw new MError("Expected a string");
+      throw new SchemaError("Expected a string");
     }
 
     const len = v.length;
     if (typeof this.#checks.min === "number" && len < this.#checks.min) {
-      throw new MError(`Value must be longer than or equal to ${this.#checks.min} characters`);
+      throw new SchemaError(`Value must be longer than or equal to ${this.#checks.min} characters`);
     }
     if (typeof this.#checks.max === "number" && len > this.#checks.max) {
-      throw new MError(`Value must be shorter than or equal to ${this.#checks.max} characters`);
+      throw new SchemaError(
+        `Value must be shorter than or equal to ${this.#checks.max} characters`,
+      );
     }
 
     if (typeof this.#checks.enum !== "undefined" && !this.#checks.enum.includes(v)) {
-      throw new MError(`Value must be one of [${this.#checks.enum.join(", ")}]`);
+      throw new SchemaError(`Value must be one of [${this.#checks.enum.join(", ")}]`);
     }
 
     if (this.#checks.match instanceof RegExp && !this.#checks.match.test(v)) {
-      throw new MError(`Value does not follow pattern ${this.#checks.match}`);
+      throw new SchemaError(`Value does not follow pattern ${this.#checks.match}`);
     }
 
     return v as TP;
@@ -227,9 +229,9 @@ export class BooleanSchema extends MongsterSchemaInternal<boolean, boolean> {
 
     if (typeof v !== "boolean") {
       if (typeof v === "undefined") {
-        throw new MError("Expected a boolean, but received undefined. Field is required.");
+        throw new SchemaError("Expected a boolean, but received undefined. Field is required.");
       }
-      throw new MError("Expected a boolean");
+      throw new SchemaError("Expected a boolean");
     }
 
     return v;
@@ -296,22 +298,22 @@ export class DateSchema extends MongsterSchemaInternal<Date, Date> {
     if (v instanceof Date) out = v;
     else if (typeof v === "string" || typeof v === "number") out = new Date(v);
     else if (typeof v === "undefined") {
-      throw new MError(
+      throw new SchemaError(
         `Expected a valid (date | date string | number), but received undefined. Field is required.`,
       );
     } else {
-      throw new MError(`Expected a valid (date | date string | number)`);
+      throw new SchemaError(`Expected a valid (date | date string | number)`);
     }
 
     const timeVal = out.getTime();
 
-    if (Number.isNaN(timeVal)) throw new MError(`Invalid date`);
+    if (Number.isNaN(timeVal)) throw new SchemaError(`Invalid date`);
 
     if (typeof this.#checks.min !== "undefined" && timeVal < this.#checks.min.getTime()) {
-      throw new MError(`Value must be after or equal to ${this.#checks.min.toISOString()}`);
+      throw new SchemaError(`Value must be after or equal to ${this.#checks.min.toISOString()}`);
     }
     if (typeof this.#checks.max !== "undefined" && timeVal > this.#checks.max.getTime()) {
-      throw new MError(`Value must be before or equal to ${this.#checks.max.toISOString()}`);
+      throw new SchemaError(`Value must be before or equal to ${this.#checks.max.toISOString()}`);
     }
 
     return out;

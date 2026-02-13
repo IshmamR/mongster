@@ -1,4 +1,4 @@
-import { MError, ValidationError } from "../error";
+import { SchemaError, ValidationError } from "../error";
 import {
   ArraySchema,
   type MongsterSchemaBase,
@@ -241,7 +241,7 @@ export function validateUpdateRecord<$T>(
         try {
           resolved.schema.parseForUpdate(value);
         } catch (err) {
-          throw new ValidationError(`$set.${path}: ${(err as MError).message}`);
+          throw new ValidationError(`$set.${path}: ${(err as SchemaError).message}`);
         }
       }
     });
@@ -261,7 +261,7 @@ export function validateUpdateRecord<$T>(
         try {
           resolved.schema.parseForUpdate(value);
         } catch (err) {
-          if (err instanceof MError) {
+          if (err instanceof SchemaError) {
             throw new ValidationError(`$setOnInsert.${path}: ${err.message}`);
           }
           throw new ValidationError(`$setOnInsert.${path}: Something did not add up`);
@@ -326,7 +326,7 @@ export function validateUpdateRecord<$T>(
       try {
         resolved.schema.parseForUpdate(value);
       } catch (err) {
-        if (err instanceof MError) throw new ValidationError(`$min.${path}: ${err.message}`);
+        if (err instanceof SchemaError) throw new ValidationError(`$min.${path}: ${err.message}`);
         throw new ValidationError(`$min.${path}: Something did not add up`);
       }
     });
@@ -341,7 +341,7 @@ export function validateUpdateRecord<$T>(
       try {
         resolved.schema.parseForUpdate(value);
       } catch (err) {
-        if (err instanceof MError) throw new ValidationError(`$max.${path}: ${err.message}`);
+        if (err instanceof SchemaError) throw new ValidationError(`$max.${path}: ${err.message}`);
         throw new ValidationError(`$max.${path}: Something did not add up`);
       }
     });
@@ -392,7 +392,7 @@ export function validateUpdateRecord<$T>(
             elementSchema.parseForUpdate(item);
           } catch (err) {
             const errPath = `$addToSet.${path}.$each[${idx}]`;
-            if (err instanceof MError) throw new ValidationError(`${errPath}: ${err.message}`);
+            if (err instanceof SchemaError) throw new ValidationError(`${errPath}: ${err.message}`);
             throw new ValidationError(`${errPath}: Something did not add up`);
           }
         });
@@ -401,7 +401,7 @@ export function validateUpdateRecord<$T>(
           elementSchema.parseForUpdate(value);
         } catch (err) {
           const errPath = `$addToSet.${path}`;
-          if (err instanceof MError) throw new ValidationError(`${errPath}: ${err.message}`);
+          if (err instanceof SchemaError) throw new ValidationError(`${errPath}: ${err.message}`);
           throw new ValidationError(`${errPath}: Something did not add up`);
         }
       }
@@ -433,7 +433,7 @@ export function validateUpdateRecord<$T>(
             elementSchema.parseForUpdate(item);
           } catch (err) {
             const errPath = `$push.${path}.$each[${idx}]`;
-            if (err instanceof MError) throw new ValidationError(`${errPath}: ${err.message}`);
+            if (err instanceof SchemaError) throw new ValidationError(`${errPath}: ${err.message}`);
             throw new ValidationError(`${errPath}: Something did not add up`);
           }
         });
@@ -442,7 +442,7 @@ export function validateUpdateRecord<$T>(
           elementSchema.parseForUpdate(value);
         } catch (err) {
           const errPath = `$push.${path}`;
-          if (err instanceof MError) throw new ValidationError(`${errPath}: ${err.message}`);
+          if (err instanceof SchemaError) throw new ValidationError(`${errPath}: ${err.message}`);
           throw new ValidationError(`${errPath}: Something did not add up`);
         }
       }
@@ -469,7 +469,7 @@ export function validateUpdateRecord<$T>(
           elementSchema.parseForUpdate(value);
         } catch (err) {
           const errPath = `$pull.${path}`;
-          if (err instanceof MError) throw new ValidationError(`${errPath}: ${err.message}`);
+          if (err instanceof SchemaError) throw new ValidationError(`${errPath}: ${err.message}`);
           throw new ValidationError(`${errPath}: Something did not add up`);
         }
       }
@@ -500,7 +500,7 @@ export function validateUpdateRecord<$T>(
           elementSchema.parseForUpdate(item);
         } catch (err) {
           const errPath = `$pullAll.${path}[${idx}]`;
-          if (err instanceof MError) throw new ValidationError(`${errPath}: ${err.message}`);
+          if (err instanceof SchemaError) throw new ValidationError(`${errPath}: ${err.message}`);
           throw new ValidationError(`${errPath}: Something did not add up`);
         }
       });
