@@ -13,6 +13,10 @@ A type-safe MongoDB ODM (Object Document Mapper) for TypeScript with schema vali
 - 🕒 **Timestamps** - Automatic `createdAt` and `updatedAt` field management
 - 🛡️ **Error Handling** - Comprehensive error types for better debugging
 
+## Releasing
+
+Releases are done manually. See [docs/RELEASING.md](docs/RELEASING.md) for the step-by-step process.
+
 ## Installation
 
 ```bash

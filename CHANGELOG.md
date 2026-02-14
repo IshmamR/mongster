@@ -9,8 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Initial changelog setup
-- Automated release pipeline with GitHub Actions
-- CI/CD workflows for testing, building, and publishing
+- CI workflows for testing and build validation
 
 ### Changed
-- Enhanced build and release process
+- Improved manual release process
