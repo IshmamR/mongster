@@ -258,10 +258,12 @@ export class ArraySchema<T, I> extends MongsterSchemaInternal<T[], I[]> {
     return this.#shapes;
   }
 
+  /** Minimum allowed array length */
   min(n: number): ArraySchema<T, I> {
     return new ArraySchema(this.#shapes, { ...this.#checks, min: n });
   }
 
+  /** Maximum allowed array length */
   max(n: number): ArraySchema<T, I> {
     return new ArraySchema(this.#shapes, { ...this.#checks, max: n });
   }

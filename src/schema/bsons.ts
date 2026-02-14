@@ -150,10 +150,12 @@ export class BinarySchema extends MongsterSchemaInternal<Binary, Binary> {
     return this.#checks;
   }
 
+  /** Minimum allowed binary buffer length (bytes). */
   min(n: number): BinarySchema {
     return new BinarySchema({ ...this.#checks, min: n });
   }
 
+  /** Maximum allowed binary buffer length (bytes). */
   max(n: number): BinarySchema {
     return new BinarySchema({ ...this.#checks, max: n });
   }

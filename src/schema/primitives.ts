@@ -26,10 +26,12 @@ export class NumberSchema<TP extends number = number> extends MongsterSchemaInte
     return this.#checks;
   }
 
+  /** Minimum allowed number value */
   min(n: number): NumberSchema<TP> {
     return new NumberSchema<TP>({ ...this.#checks, min: n });
   }
 
+  /** Maximum allowed number value */
   max(n: number): NumberSchema<TP> {
     return new NumberSchema<TP>({ ...this.#checks, max: n });
   }
@@ -113,10 +115,12 @@ export class StringSchema<TP extends string = string> extends MongsterSchemaInte
     return this.#checks;
   }
 
+  /** Minimum allowed string length */
   min(n: number): StringSchema<TP> {
     return new StringSchema<TP>({ ...this.#checks, min: n });
   }
 
+  /** Maximum allowed string length */
   max(n: number): StringSchema<TP> {
     return new StringSchema<TP>({ ...this.#checks, max: n });
   }
