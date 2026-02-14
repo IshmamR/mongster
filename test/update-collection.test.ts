@@ -675,14 +675,76 @@ describe("parseForUpdate Method Validation", () => {
 
       const Model = client.model("setoninsert_validation_test", schema);
 
-      // Should fail: wrong type in $setOnInsert
       expect(() =>
         Model.updateOne(
           { id: "test" },
           { $setOnInsert: { createdBy: 123 as any } },
           { upsert: true },
         ),
-      ).toThrow();
+      ).toThrow(ValidationError);
+    });
+
+    test("should allow ObjectId _id in $setOnInsert for upserts", async () => {
+      const schema = M.schema({
+        key: M.string(),
+        value: M.number(),
+      });
+
+      const Model = client.model("setoninsert_id_upsert_test", schema);
+
+      const fixedId = new ObjectId();
+
+      await Model.updateOne(
+        { key: "set-on-insert-id" },
+        {
+          $set: { value: 5 },
+          $setOnInsert: { _id: fixedId },
+        },
+        { upsert: true },
+      );
+
+      const created = await Model.findOne({ key: "set-on-insert-id" });
+      expect(created?._id.toString()).toBe(fixedId.toString());
+    });
+
+    test("should reject non-ObjectId _id in $setOnInsert", async () => {
+      const schema = M.schema({
+        key: M.string(),
+        value: M.number(),
+      });
+
+      const Model = client.model("setoninsert_invalid_id_test", schema);
+
+      expect(() =>
+        Model.updateOne(
+          { key: "invalid-id" },
+          {
+            $set: { value: 1 },
+            $setOnInsert: { _id: "not-objectid" as any },
+          },
+          { upsert: true },
+        ),
+      ).toThrow(ValidationError);
+    });
+
+    test("upsertOne should preserve provided _id on insert", async () => {
+      const schema = M.schema({
+        key: M.string(),
+        value: M.number(),
+      });
+
+      const Model = client.model("upsertone_preserve_id_test", schema);
+
+      const fixedId = new ObjectId();
+
+      await Model.upsertOne(
+        { key: "upsert-one-id" },
+        { _id: fixedId, key: "upsert-one-id", value: 42 },
+      );
+
+      const created = await Model.findOne({ key: "upsert-one-id" });
+      expect(created?._id.toString()).toBe(fixedId.toString());
+      expect(created?.value).toBe(42);
     });
 
     test("should handle null and undefined correctly in updates", async () => {

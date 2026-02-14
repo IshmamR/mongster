@@ -12,7 +12,9 @@
   "cSpell.words": [
     "bsons",
     "Mongs",
-    "mongster"
+    "mongster",
+    "Optionalize",
+    "Optionalized"
   ],
   "typescript.tsdk": "node_modules/typescript/lib",
   "[typescript]": {

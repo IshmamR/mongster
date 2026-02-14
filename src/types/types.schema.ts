@@ -143,9 +143,41 @@ export type InferSchemaType<MS extends MongsterSchemaBase<any>> = Prettify<
 >;
 
 type ContainsAll<T, U> = Exclude<U, T> extends never ? true : false;
-export type InferSchemaInputType<MS extends MongsterSchemaBase<any>> = ContainsAll<
-  keyof MS["$input"],
-  TimestampBaseKeys
-> extends true
-  ? Prettify<Omit<MS["$input"], TimestampBaseKeys> & { [K in TimestampBaseKeys]?: Date }>
-  : MS["$input"];
+
+/**
+ * Makes specific keys optional, only if they exist on the input type
+ */
+type OptionalizeIfPresent<I, K extends PropertyKey> = Prettify<
+  Omit<I, Extract<keyof I, K>> & Partial<Pick<I, Extract<keyof I, K>>>
+>;
+
+/**
+ * Restrict _id augmentation to plain object-like schema inputs
+ */
+type IsPlainObjectInput<I> = [I] extends [object]
+  ? [I] extends [readonly any[]]
+    ? false
+    : [I] extends [NoExpandType]
+      ? false
+      : true
+  : false;
+
+/**
+ * Root schema inputs accept optional _id (provided or auto-generated)
+ */
+type WithOptionalInputId<I> = IsPlainObjectInput<I> extends true
+  ? "_id" extends keyof I
+    ? Prettify<Omit<I, "_id"> & { _id?: I["_id"] }>
+    : Prettify<I & { _id?: ObjectId }>
+  : I;
+
+// createdAt/updatedAt are optional on input when present in schema input shape.
+type TimestampOptionalizedInput<I> = ContainsAll<keyof I, TimestampBaseKeys> extends true
+  ? OptionalizeIfPresent<I, TimestampBaseKeys>
+  : I;
+
+export type InferSchemaInputType<MS extends MongsterSchemaBase<any>> = MS extends {
+  collectIndexes(): unknown;
+}
+  ? WithOptionalInputId<TimestampOptionalizedInput<MS["$input"]>>
+  : TimestampOptionalizedInput<MS["$input"]>;

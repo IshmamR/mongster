@@ -1,3 +1,4 @@
+import { ObjectId } from "mongodb";
 import { SchemaError, ValidationError } from "../error";
 import {
   ArraySchema,
@@ -250,6 +251,16 @@ export function validateUpdateRecord<$T>(
   // $setOnInsert
   if (typeof processedRecord.$setOnInsert !== "undefined") {
     Object.entries(processedRecord.$setOnInsert).forEach(([path, value]) => {
+      if (path === "_id") {
+        if (typeof value === "undefined") {
+          throw new ValidationError(`Cannot set "${path}" to undefined in $setOnInsert`);
+        }
+        if (!(value instanceof ObjectId)) {
+          throw new ValidationError("$setOnInsert._id must be an ObjectId");
+        }
+        return;
+      }
+
       const resolved = resolveSchemaAtPath(path, shape);
       if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
 

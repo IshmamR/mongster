@@ -477,7 +477,7 @@ export class MongsterModel<
 
     const collection = this.getCollection();
 
-    const parsedUpdateData = this.#schema.parseForUpdate(updateData as any);
+    const parsedUpdateData = this.#schema.parseForUpdate(updateData as any, options?.upsert);
 
     const result = await collection.updateOne(
       filter as Filter<OT>,
@@ -509,7 +509,7 @@ export class MongsterModel<
 
     const collection = this.getCollection();
 
-    const parsedUpdateData = this.#schema.parseForUpdate(updateData as any);
+    const parsedUpdateData = this.#schema.parseForUpdate(updateData as any, options?.upsert);
 
     const result = await collection.updateMany(
       filter as Filter<OT>,
@@ -541,7 +541,7 @@ export class MongsterModel<
 
     const collection = this.getCollection();
 
-    const parsedUpdateData = this.#schema.parseForUpdate(updateData as any);
+    const parsedUpdateData = this.#schema.parseForUpdate(updateData as any, options?.upsert);
 
     const result = await collection.findOneAndUpdate(
       filter as Filter<OT>,
@@ -632,8 +632,11 @@ export class MongsterModel<
     const collection = this.getCollection();
     const parsedData = this.#schema.parse(updateData);
 
-    const { _id, ...dataWithoutId } = parsedData as Record<string, unknown>;
-    const updateFilter: UpdateFilter<OT> = { $set: dataWithoutId } as UpdateFilter<OT>;
+    const { _id, ...dataWithoutId } = parsedData;
+    const updateFilter = { $set: dataWithoutId } as UpdateFilter<OT>;
+    if (typeof _id !== "undefined") {
+      (updateFilter as UpdateFilter<any>).$setOnInsert = { _id };
+    }
 
     const result = await collection.updateOne(filter as Filter<OT>, updateFilter, {
       ...options,

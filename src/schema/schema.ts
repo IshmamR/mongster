@@ -136,7 +136,7 @@ export class MongsterSchema<
   parseForUpdate(updateObj: MongsterUpdateFilter<$T>, isUpsert?: boolean): MongsterUpdateFilter<$T>;
   parseForUpdate(v: unknown): $T | undefined;
   parseForUpdate(updateObj: unknown, isUpsert?: boolean): any {
-    // If called with update filter object
+    // when called with update filter object
     if (typeof updateObj === "object" && updateObj !== null && !Array.isArray(updateObj)) {
       const hasUpdateOperator = Object.keys(updateObj).some((k) => k.startsWith("$"));
       if (hasUpdateOperator) {
@@ -144,8 +144,8 @@ export class MongsterSchema<
       }
     }
 
-    // Otherwise, treat as regular parse for update (partial validation)
-    if (updateObj === undefined) return undefined;
+    // otherwise, treat as regular parse for update (partial validation)
+    if (typeof updateObj === "undefined") return undefined;
 
     if (typeof updateObj !== "object" || updateObj === null)
       throw new SchemaError("Expected an object");
@@ -156,8 +156,8 @@ export class MongsterSchema<
     for (const [k, s] of Object.entries(this.#shape)) {
       try {
         const parsed = s.parseForUpdate((updateObj as any)[k]);
-        // Only include defined values
-        if (parsed !== undefined) {
+        // we only include defined values
+        if (typeof parsed !== "undefined") {
           out[k] = parsed;
         }
       } catch (err) {

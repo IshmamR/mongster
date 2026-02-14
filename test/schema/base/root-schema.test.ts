@@ -1,6 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 import { Decimal128, ObjectId } from "mongodb";
 import { MongsterSchemaBuilder } from "../../../src/schema";
+import type { InferSchemaInputType } from "../../../src/types/types.schema";
 
 const M = new MongsterSchemaBuilder();
 
@@ -60,6 +61,29 @@ describe("MongsterSchema", () => {
     expect(() => M.schema({ embedded: M.schema({ name: M.string() }) as any })).toThrowError(
       "MongsterSchema cannot be embedded",
     );
+  });
+
+  test("should infer optional _id for schema input", () => {
+    const schema = M.schema({
+      name: M.string(),
+    });
+
+    type TInput = InferSchemaInputType<typeof schema>;
+    expectTypeOf<TInput>().toEqualTypeOf<{
+      _id?: ObjectId | undefined;
+      name: string;
+    }>();
+
+    const withId = {
+      _id: new ObjectId(),
+      name: "typed-user",
+    } satisfies TInput;
+    expect(withId._id).toBeInstanceOf(ObjectId);
+
+    const withoutId = {
+      name: "typed-user-no-id",
+    } satisfies TInput;
+    expect(withoutId.name).toBe("typed-user-no-id");
   });
 
   test("should handle complex nested schemas", () => {
