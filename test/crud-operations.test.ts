@@ -26,14 +26,16 @@ describe("CRUD Operations Edge Cases", () => {
       const schema = M.schema({
         name: M.string(),
         counter: M.number().defaultFn(() => Math.random()),
-      }).withTimestamps();
+      }).withTimestamps({ createdAt: "cAt", updatedAt: "uAt" });
 
       const Model = client.model("default_fn_test", schema);
 
       const doc = await Model.createOne({ name: "test" });
 
-      expect(doc?.createdAt).toBeInstanceOf(Date);
-      expect(doc?.updatedAt).toBeInstanceOf(Date);
+      expect(doc?.cAt).toBeInstanceOf(Date);
+      expect(doc?.uAt).toBeInstanceOf(Date);
+      expect((doc as any)?.createdAt).toBeUndefined();
+      expect((doc as any)?.updatedAt).toBeUndefined();
       expect(doc?.counter).toBeTypeOf("number");
       expect(doc?.name).toBe("test");
     });

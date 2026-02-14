@@ -9,7 +9,9 @@ import type {
   ObjectOutput,
   Resolve,
   ResolveTuple,
+  TimestampConfig,
   WithTimestamps,
+  WithTimestampsInput,
 } from "../types/types.schema";
 import { MongsterSchemaInternal, WithDefaultSchema } from "./base";
 import { MongsterSchema } from "./schema";
@@ -71,10 +73,33 @@ export class ObjectSchema<
     return clone;
   }
 
-  withTimestamps(): ObjectSchema<T, WithTimestamps<$T>> {
+  #getTimestampKeys(): { createdAt?: string; updatedAt?: string } {
+    const tsOptions = this.options.withTimestamps;
+    if (!tsOptions) return {};
+    if (tsOptions === true) return { createdAt: "createdAt", updatedAt: "updatedAt" };
+
+    const entries = (["createdAt", "updatedAt"] as const).map((k) => {
+      const val = tsOptions[k];
+      const v =
+        Object.hasOwn(tsOptions, k) && val === false
+          ? undefined
+          : typeof val === "string"
+            ? val
+            : k;
+      return [k, v] as const;
+    });
+    return Object.fromEntries(entries);
+  }
+
+  withTimestamps<const C extends TimestampConfig>(
+    config?: C,
+  ): ObjectSchema<T, WithTimestamps<$T, C>, WithTimestampsInput<$I, C>> {
     const clone = this.clone();
-    clone.options = { ...this.options, withTimestamps: true };
-    return clone as ObjectSchema<T, WithTimestamps<$T>>;
+    clone.options = {
+      ...this.options,
+      withTimestamps: typeof config === "undefined" ? true : config,
+    };
+    return clone as unknown as ObjectSchema<T, WithTimestamps<$T, C>, WithTimestampsInput<$I, C>>;
   }
 
   default(o: $T): WithDefaultSchema<$T> {
@@ -112,6 +137,12 @@ export class ObjectSchema<
           cause: err,
         });
       }
+    }
+
+    if (this.options.withTimestamps) {
+      const timestampKeys = this.#getTimestampKeys();
+      if (timestampKeys.createdAt) out[timestampKeys.createdAt] = new Date();
+      if (timestampKeys.updatedAt) out[timestampKeys.updatedAt] = new Date();
     }
 
     return out as $T;

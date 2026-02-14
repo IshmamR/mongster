@@ -95,12 +95,44 @@ export interface SchemaMeta<Collection> {
   options: MongsterIndexOptions<Collection>;
 }
 
-export type TimestampKeys = "createdAt" | "updatedAt";
+export type TimestampBaseKeys = "createdAt" | "updatedAt";
 
-export type WithTimestamps<O> = Prettify<O & { [K in TimestampKeys & string]: Date }>;
+export interface TimestampConfig {
+  createdAt?: boolean | string;
+  updatedAt?: boolean | string;
+}
+
+type ResolveTimestampKey<
+  C extends TimestampConfig | undefined,
+  K extends TimestampBaseKeys,
+> = C extends undefined
+  ? K
+  : K extends keyof C
+    ? C[K] extends false
+      ? never
+      : C[K] extends string
+        ? C[K]
+        : K
+    : K;
+
+export type TimestampKeysFromConfig<C extends TimestampConfig | undefined> =
+  | ResolveTimestampKey<C, "createdAt">
+  | ResolveTimestampKey<C, "updatedAt">;
+
+type TimestampShape<C extends TimestampConfig | undefined> = {
+  [K in TimestampKeysFromConfig<C> as K extends string ? K : never]: Date;
+};
+
+export type WithTimestamps<O, C extends TimestampConfig | undefined = undefined> = Prettify<
+  Omit<O, keyof TimestampShape<C>> & TimestampShape<C>
+>;
+
+export type WithTimestampsInput<I, C extends TimestampConfig | undefined = undefined> = Prettify<
+  Omit<I, keyof TimestampShape<C>> & Partial<TimestampShape<C>>
+>;
 
 export interface MongsterSchemaOptions {
-  withTimestamps?: boolean;
+  withTimestamps?: boolean | TimestampConfig;
 }
 
 /**
@@ -113,7 +145,7 @@ export type InferSchemaType<MS extends MongsterSchemaBase<any>> = Prettify<
 type ContainsAll<T, U> = Exclude<U, T> extends never ? true : false;
 export type InferSchemaInputType<MS extends MongsterSchemaBase<any>> = ContainsAll<
   keyof MS["$input"],
-  TimestampKeys
+  TimestampBaseKeys
 > extends true
-  ? Prettify<Omit<MS["$input"], TimestampKeys> & { [K in TimestampKeys]?: Date }>
+  ? Prettify<Omit<MS["$input"], TimestampBaseKeys> & { [K in TimestampBaseKeys]?: Date }>
   : MS["$input"];

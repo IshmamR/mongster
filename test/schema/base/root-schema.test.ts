@@ -39,6 +39,21 @@ describe("MongsterSchema", () => {
     };
 
     expect(() => schema.parse(data)).not.toThrow();
+    const parsed = schema.parse(data);
+    expect(parsed.createdAt).toBeInstanceOf(Date);
+    expect(parsed.updatedAt).toBeInstanceOf(Date);
+  });
+
+  test("should allow disabling createdAt and renaming updatedAt", () => {
+    const schema = M.schema({
+      name: M.string(),
+    }).withTimestamps({ createdAt: false, updatedAt: "uAt" });
+
+    const parsed = schema.parse({ name: "hello" });
+
+    expect((parsed as any).createdAt).toBeUndefined();
+    expect((parsed as any).updatedAt).toBeUndefined();
+    expect(parsed.uAt).toBeInstanceOf(Date);
   });
 
   test("should reject embedded MongsterSchema", () => {

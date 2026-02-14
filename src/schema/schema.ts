@@ -11,7 +11,9 @@ import type {
   ObjectInput,
   ObjectOutput,
   Resolve,
+  TimestampConfig,
   WithTimestamps,
+  WithTimestampsInput,
 } from "../types/types.schema";
 import {
   ArraySchema,
@@ -56,6 +58,24 @@ export class MongsterSchema<
     return this.#shape;
   }
 
+  #getTimestampKeys(): { createdAt?: string; updatedAt?: string } {
+    const tsOptions = this.options.withTimestamps;
+    if (!tsOptions) return {};
+    if (tsOptions === true) return { createdAt: "createdAt", updatedAt: "updatedAt" };
+
+    const entries = (["createdAt", "updatedAt"] as const).map((k) => {
+      const val = tsOptions[k];
+      const v =
+        Object.hasOwn(tsOptions, k) && val === false
+          ? undefined
+          : typeof val === "string"
+            ? val
+            : k;
+      return [k, v] as const;
+    });
+    return Object.fromEntries(entries);
+  }
+
   addIndex<K extends AllFilterKeys<$T>>(
     keys: Record<K, MongsterIndexDirection>,
     options?: MongsterIndexOptions<$T>,
@@ -65,10 +85,15 @@ export class MongsterSchema<
     return clone;
   }
 
-  withTimestamps(): MongsterSchema<T, WithTimestamps<$T>> {
+  withTimestamps<const C extends TimestampConfig>(
+    config?: C,
+  ): MongsterSchema<T, WithTimestamps<$T, C>, WithTimestampsInput<$I, C>> {
     const clone = this.clone();
-    clone.options = { ...this.options, withTimestamps: true };
-    return clone as MongsterSchema<T, WithTimestamps<$T>>;
+    clone.options = {
+      ...this.options,
+      withTimestamps: typeof config === "undefined" ? true : config,
+    };
+    return clone as unknown as MongsterSchema<T, WithTimestamps<$T, C>, WithTimestampsInput<$I, C>>;
   }
 
   clone(): this {
@@ -99,8 +124,9 @@ export class MongsterSchema<
     }
 
     if (this.options.withTimestamps) {
-      out.createdAt = new Date();
-      out.updatedAt = new Date();
+      const timestampKeys = this.#getTimestampKeys();
+      if (timestampKeys.createdAt) out[timestampKeys.createdAt] = new Date();
+      if (timestampKeys.updatedAt) out[timestampKeys.updatedAt] = new Date();
     }
 
     return out as $T;
@@ -161,12 +187,17 @@ export class MongsterSchema<
     );
 
     if (this.options.withTimestamps) {
-      const autoTimestampData: any = { updatedAt: true };
-      if (isUpsert) autoTimestampData.createdAt = true;
-      processedUpdateRecord.$currentDate = {
-        ...(processedUpdateRecord.$currentDate ?? {}),
-        ...autoTimestampData,
-      };
+      const timestampKeys = this.#getTimestampKeys();
+      const autoTimestampData: Record<string, true> = {};
+      if (timestampKeys.updatedAt) autoTimestampData[timestampKeys.updatedAt] = true;
+      if (isUpsert && timestampKeys.createdAt) autoTimestampData[timestampKeys.createdAt] = true;
+
+      if (Object.keys(autoTimestampData).length) {
+        (processedUpdateRecord as any).$currentDate = {
+          ...(processedUpdateRecord.$currentDate ?? {}),
+          ...autoTimestampData,
+        };
+      }
     }
 
     return validatedUpdateRecord;

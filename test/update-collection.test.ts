@@ -619,25 +619,37 @@ describe("parseForUpdate Method Validation", () => {
       const Model = client.model("empty_update_test", schema);
 
       // Should throw for empty update - MongoDB requires at least one operator
-      await expect(Model.updateOne({}, {})).rejects.toThrow();
+      expect(Model.updateOne({}, {})).rejects.toThrow();
     });
 
     test("should validate with timestamps enabled", async () => {
       const schema = M.schema({
         name: M.string(),
         age: M.number(),
-      }).withTimestamps();
+      }).withTimestamps({ createdAt: false, updatedAt: "uAt" });
 
       const Model = client.model("timestamps_validation_test", schema);
 
-      await Model.createOne({ name: "initial", age: 20 });
+      const created = await Model.createOne({ name: "initial", age: 20 });
+
+      expect(created?.uAt).toBeInstanceOf(Date);
+      expect((created as any).createdAt).toBeUndefined();
+      expect((created as any).updatedAt).toBeUndefined();
+
+      const createdTimestamp = (created as any).uAt as Date;
 
       // Should fail: wrong type
       expect(() => Model.updateOne({}, { $set: { age: "thirty" as any } })).toThrow();
 
-      // Should automatically add updatedAt when implemented properly
       await Model.updateOne({}, { $set: { name: "test" } });
-      // When implemented, should verify $currentDate was added for updatedAt
+
+      const afterUpdate = await Model.findOne({});
+      expect((afterUpdate as any)?.uAt).toBeInstanceOf(Date);
+      expect(((afterUpdate as any)?.uAt as Date).getTime()).toBeGreaterThanOrEqual(
+        createdTimestamp.getTime(),
+      );
+      expect((afterUpdate as any)?.createdAt).toBeUndefined();
+      expect((afterUpdate as any)?.updatedAt).toBeUndefined();
     });
 
     test("should validate on upsert operations", async () => {
