@@ -324,6 +324,25 @@ describe("CRUD Operations Edge Cases", () => {
   });
 
   describe("Query Operations Edge Cases", () => {
+    test("should handle findById", async () => {
+      const schema = M.schema({
+        name: M.string(),
+        age: M.number(),
+      });
+
+      const Model = client.model("find_by_id_test", schema);
+
+      const created = await Model.createOne({ name: "findme", age: 21 });
+      if (!created) throw new Error("createOne failed");
+
+      const found = await Model.findById(created._id);
+      expect(found?._id.toString()).toBe(created._id.toString());
+      expect(found?.name).toBe("findme");
+
+      const notFound = await Model.findById(new ObjectId());
+      expect(notFound).toBeNull();
+    });
+
     test("should handle find with sorting", async () => {
       const schema = M.schema({
         name: M.string(),

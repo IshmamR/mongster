@@ -26,6 +26,7 @@ import type {
   CountTransactionOptions,
   DeleteTransactionOptions,
   DistinctTransactionOptions,
+  FindByIdTransactionOptions,
   FindOneAndDeleteTransactionOptions,
   FindOneAndReplaceTransactionOptions,
   FindOneAndUpdateTransactionOptions,
@@ -159,6 +160,10 @@ export class TransactionModel<
     options?: FindOneTransactionOptions,
   ): Promise<OT | null> {
     return this.#baseModel.findOne(filter, this.#injectSession(options));
+  }
+
+  async findById(id: WithId<OT>["_id"], options?: FindByIdTransactionOptions): Promise<OT | null> {
+    return this.#baseModel.findById(id, this.#injectSession(options));
   }
 
   async count(filter?: Filter<OT>, options?: CountTransactionOptions): Promise<number> {

@@ -59,6 +59,7 @@ export type FindOneAndDeleteTransactionOptions = Omit<FindOneAndDeleteOptions, "
 };
 export type FindTransactionOptions = Omit<FindOptions, "session"> & Abortable;
 export type FindOneTransactionOptions = Omit<FindOneOptions, "session" | "timeoutMode"> & Abortable;
+export type FindByIdTransactionOptions = FindOneTransactionOptions;
 export type CountTransactionOptions = Omit<CountDocumentsOptions, "session"> & Abortable;
 export type DistinctTransactionOptions = Omit<DistinctOptions, "session">;
 export type AggregateTransactionOptions = Omit<AggregateOptions, "session"> & Abortable;

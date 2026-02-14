@@ -430,6 +430,20 @@ export class MongsterModel<
     return result;
   }
 
+  async findById(
+    id: WithId<OT>["_id"],
+    options?: Omit<FindOneOptions, "timeoutMode"> & Abortable,
+  ): Promise<OT | null> {
+    if (id === null || typeof id === "undefined") {
+      throw new QueryError("findById: id is required");
+    }
+
+    const collection = this.getCollection();
+
+    const result = await collection.findOne({ _id: id } as Filter<OT>, options);
+    return result;
+  }
+
   async distinct(
     key: AllFilterKeys<OT>,
     filter?: MongsterFilter<OT>,
