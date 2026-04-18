@@ -40,7 +40,7 @@ import type {
 } from "./types/types.transaction";
 
 /**
- * Creates a transaction-scoped version of a model that automatically uses the session
+ * creates a transaction-scoped version of a model that automatically uses the session
  */
 export class TransactionModel<
   CN extends string,
@@ -59,7 +59,9 @@ export class TransactionModel<
   #injectSession<O extends Record<string, any>>(options?: O): O & { session: ClientSession } {
     let opt = options;
     if (typeof options !== "object" || Array.isArray(options)) opt = undefined;
-    return { ...(opt ?? {}), session: this.session } as O & { session: ClientSession };
+    return { ...(opt ?? {}), session: this.session } as O & {
+      session: ClientSession;
+    };
   }
 
   async insertOne(
@@ -70,7 +72,7 @@ export class TransactionModel<
   }
 
   async insertMany(
-    inputArr: OptionalUnlessRequiredId<OT>[],
+    inputArr: OptionalUnlessRequiredId<T>[],
     options?: BulkWriteTransactionOptions,
   ): Promise<InsertManyResult<OT>> {
     return this.#baseModel.insertMany(inputArr, this.#injectSession(options));

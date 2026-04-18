@@ -32,14 +32,23 @@ import type {
 } from "mongodb";
 import type { MongsterClient } from "../client";
 import { IndexSyncError, QueryError } from "../error";
+import { HookRegistry } from "../hooks";
 import { FindQuery } from "../queries/FindQuery";
 import type { MongsterSchema } from "../schema/schema";
 import type { MongsterFilter, MongsterUpdateFilter } from "../types/types.filter";
+import type {
+  HookName,
+  HookOperation,
+  PostHookContextMap,
+  PostHookFn,
+  PreHookContextMap,
+  PreHookFn,
+} from "../types/types.hooks";
 import type { SyncIndexResponse } from "../types/types.model";
 import type { AllFilterKeys } from "../types/types.query";
 import type { InferSchemaInputType, InferSchemaType } from "../types/types.schema";
 
-const propertiesToCopyForNormalization = [
+const propsToCopyForNormalization = [
   "unique",
   "sparse",
   "background",
@@ -67,9 +76,11 @@ const propertiesToCopyForNormalization = [
 function normalizeIndex(idx: IndexDescription): IndexDescription {
   if (!idx.key) throw new IndexSyncError("Normalization error: No key in index object");
 
-  const normalized: IndexDescription = { key: idx.key };
-  for (const prop of propertiesToCopyForNormalization) {
-    if (typeof idx[prop] !== "undefined") {
+  const normalized: IndexDescription = {
+    key: Object.fromEntries(Object.entries(idx.key).sort(([a], [b]) => a.localeCompare(b))),
+  };
+  for (const prop of propsToCopyForNormalization) {
+    if (idx[prop] !== undefined) {
       normalized[prop] = idx[prop] as never; // needed never to stop TS from screaming T_T
     }
   }
@@ -95,9 +106,9 @@ function normalizeIndex(idx: IndexDescription): IndexDescription {
  */
 function hashIndex(idx: IndexDescription): string {
   let hash = JSON.stringify(idx.key);
-  for (const prop of propertiesToCopyForNormalization) {
+  for (const prop of propsToCopyForNormalization) {
     const val = idx[prop];
-    if (typeof val !== "undefined") {
+    if (val !== undefined) {
       hash += `|${prop}:${typeof val === "object" ? JSON.stringify(val) : val}`;
     }
   }
@@ -143,6 +154,7 @@ export class MongsterModel<
   #connection: MongsterClient;
   #collection?: Collection<OT>;
   #collectionName: CN;
+  #hooks: HookRegistry;
 
   #indexSynced = false;
   #indexSyncPromise: Promise<SyncIndexResponse> | null = null;
@@ -151,6 +163,34 @@ export class MongsterModel<
     this.#collectionName = collectionName;
     this.#schema = schema;
     this.#connection = connection;
+    this.#hooks = new HookRegistry();
+  }
+
+  pre<Op extends HookName>(op: Op, fn: PreHookFn<Op, T, OT>): this {
+    this.#hooks.addPre(op, fn);
+    return this;
+  }
+
+  post<Op extends HookName>(op: Op, fn: PostHookFn<Op, T, OT>): this {
+    this.#hooks.addPost(op, fn);
+    return this;
+  }
+
+  async #runPre<Op extends HookOperation>(
+    op: Op,
+    ctx: PreHookContextMap<T, OT>[Op],
+  ): Promise<PreHookContextMap<T, OT>[Op]> {
+    let current = await this.#hooks.runPre(op, ctx);
+    current = await this.#schema.getHooks().runPre(op, current);
+    return current;
+  }
+
+  async #runPost<Op extends HookOperation>(
+    op: Op,
+    ctx: PostHookContextMap<T, OT>[Op],
+  ): Promise<void> {
+    await this.#schema.getHooks().runPost(op, ctx);
+    await this.#hooks.runPost(op, ctx);
   }
 
   getCollection(): Collection<OT> {
@@ -282,17 +322,19 @@ export class MongsterModel<
 
     if (!this.#indexSynced) await this.syncIndexes();
 
+    const preCtx = await this.#runPre("insertOne", { doc: input as T });
+
     const collection = this.getCollection();
-
-    const parsedInput = this.#schema.parse(input) as OptionalUnlessRequiredId<OT>;
-
+    const parsedInput = this.#schema.parse(preCtx.doc) as OptionalUnlessRequiredId<OT>;
     const result = await collection.insertOne(parsedInput, options);
+
+    await this.#runPost("insertOne", { doc: preCtx.doc, result });
 
     return result;
   }
 
   async insertMany(
-    inputArr: OptionalUnlessRequiredId<OT>[],
+    inputArr: OptionalUnlessRequiredId<T>[],
     options?: BulkWriteOptions,
   ): Promise<InsertManyResult<OT>> {
     if (!Array.isArray(inputArr)) {
@@ -304,11 +346,13 @@ export class MongsterModel<
 
     if (!this.#indexSynced) await this.syncIndexes();
 
+    const preCtx = await this.#runPre("insertMany", { docs: inputArr as T[] });
+
     const collection = this.getCollection();
 
     const parsedInputArr: OptionalUnlessRequiredId<OT>[] = [];
-    for (let i = 0; i < inputArr.length; i++) {
-      const input = inputArr[i];
+    for (let i = 0; i < preCtx.docs.length; i++) {
+      const input = preCtx.docs[i];
       if (!input || typeof input !== "object") {
         throw new QueryError(`insertMany: input at index ${i} must be an object`);
       }
@@ -320,6 +364,9 @@ export class MongsterModel<
     }
 
     const result = await collection.insertMany(parsedInputArr, options);
+
+    await this.#runPost("insertMany", { docs: preCtx.docs, result });
+
     return result;
   }
 
@@ -339,13 +386,17 @@ export class MongsterModel<
 
     if (!this.#indexSynced) await this.syncIndexes();
 
+    const preCtx = await this.#runPre("createOne", { doc: input as T });
+
     const collection = this.getCollection();
-
-    const parsedInput = this.#schema.parse(input) as OptionalUnlessRequiredId<OT>;
-
+    const parsedInput = this.#schema.parse(preCtx.doc) as OptionalUnlessRequiredId<OT>;
     const result = await collection.insertOne(parsedInput, options);
     if (!result.acknowledged) return null;
-    return { ...parsedInput, _id: result.insertedId ?? input._id } as OT;
+    const created = { ...parsedInput, _id: result.insertedId ?? preCtx.doc._id } as OT;
+
+    await this.#runPost("createOne", { doc: preCtx.doc, result: created });
+
+    return created;
   }
 
   async createMany(
@@ -361,11 +412,13 @@ export class MongsterModel<
 
     if (!this.#indexSynced) await this.syncIndexes();
 
+    const preCtx = await this.#runPre("createMany", { docs: inputArr as T[] });
+
     const collection = this.getCollection();
 
     const parsedInputArr: OptionalUnlessRequiredId<OT>[] = [];
-    for (let i = 0; i < inputArr.length; i++) {
-      const input = inputArr[i];
+    for (let i = 0; i < preCtx.docs.length; i++) {
+      const input = preCtx.docs[i];
       if (!input || typeof input !== "object") {
         throw new QueryError(`createMany: input at index ${i} must be an object`);
       }
@@ -377,12 +430,16 @@ export class MongsterModel<
     }
 
     const result = await collection.insertMany(parsedInputArr, options);
-    if (!result.acknowledged || result.insertedCount !== inputArr.length) return [];
+    if (!result.acknowledged || result.insertedCount !== preCtx.docs.length) return [];
 
-    return parsedInputArr.map((pi, index) => ({
+    const created = parsedInputArr.map((pi, index) => ({
       ...pi,
-      _id: (pi as any)._id ?? result.insertedIds[index],
+      _id: pi._id ?? result.insertedIds[index],
     })) as OT[];
+
+    await this.#runPost("createMany", { docs: preCtx.docs, result: created });
+
+    return created;
   }
 
   async count(filter?: Filter<OT>, options?: CountDocumentsOptions & Abortable): Promise<number> {
@@ -409,8 +466,12 @@ export class MongsterModel<
 
     const collection = this.getCollection();
 
-    const cursor = collection.find<OT>(filter as Filter<OT>, options);
-    return new FindQuery<T, OT>(cursor);
+    const hooks = {
+      preExec: async (ctx: { filter: any }) => this.#runPre("find", ctx),
+      postExec: async (ctx: { filter: any; result: OT[] }) => this.#runPost("find", ctx),
+    };
+
+    return new FindQuery<T, OT>(collection, filter as Filter<OT>, options, hooks);
   }
 
   async findOne(
@@ -424,23 +485,31 @@ export class MongsterModel<
       throw new QueryError("findOne: filter cannot be an array");
     }
 
-    const collection = this.getCollection();
+    const preCtx = await this.#runPre("findOne", { filter });
 
-    const result = await collection.findOne(filter as Filter<OT>, options);
+    const collection = this.getCollection();
+    const result = await collection.findOne(preCtx.filter as Filter<OT>, options);
+
+    await this.#runPost("findOne", { filter: preCtx.filter, result });
+
     return result;
   }
 
   async findById(
-    id: WithId<OT>["_id"],
+    _id: WithId<OT>["_id"],
     options?: Omit<FindOneOptions, "timeoutMode"> & Abortable,
   ): Promise<OT | null> {
-    if (id === null || typeof id === "undefined") {
-      throw new QueryError("findById: id is required");
+    if (_id === null || _id === undefined) {
+      throw new QueryError("findById: _id is required");
     }
 
-    const collection = this.getCollection();
+    const preCtx = await this.#runPre("findById", { _id });
 
-    const result = await collection.findOne({ _id: id } as Filter<OT>, options);
+    const collection = this.getCollection();
+    const result = await collection.findOne({ _id: preCtx._id } as Filter<OT>, options);
+
+    await this.#runPost("findById", { _id: preCtx._id, result });
+
     return result;
   }
 
@@ -489,15 +558,18 @@ export class MongsterModel<
 
     if (options?.upsert && !this.#indexSynced) await this.syncIndexes();
 
+    const preCtx = await this.#runPre("updateOne", { filter, update: updateData });
+
     const collection = this.getCollection();
-
-    const parsedUpdateData = this.#schema.parseForUpdate(updateData as any, options?.upsert);
-
+    const parsedUpdateData = this.#schema.parseForUpdate(preCtx.update as any, options?.upsert);
     const result = await collection.updateOne(
-      filter as Filter<OT>,
+      preCtx.filter as Filter<OT>,
       parsedUpdateData as UpdateFilter<OT>,
       options,
     );
+
+    await this.#runPost("updateOne", { filter: preCtx.filter, update: preCtx.update, result });
+
     return result;
   }
 
@@ -521,15 +593,18 @@ export class MongsterModel<
 
     if (options?.upsert && !this.#indexSynced) await this.syncIndexes();
 
+    const preCtx = await this.#runPre("updateMany", { filter, update: updateData });
+
     const collection = this.getCollection();
-
-    const parsedUpdateData = this.#schema.parseForUpdate(updateData as any, options?.upsert);
-
+    const parsedUpdateData = this.#schema.parseForUpdate(preCtx.update as any, options?.upsert);
     const result = await collection.updateMany(
-      filter as Filter<OT>,
+      preCtx.filter as Filter<OT>,
       parsedUpdateData as UpdateFilter<OT>,
       options,
     );
+
+    await this.#runPost("updateMany", { filter: preCtx.filter, update: preCtx.update, result });
+
     return result;
   }
 
@@ -553,15 +628,22 @@ export class MongsterModel<
 
     if (options?.upsert && !this.#indexSynced) await this.syncIndexes();
 
+    const preCtx = await this.#runPre("findOneAndUpdate", { filter, update: updateData });
+
     const collection = this.getCollection();
-
-    const parsedUpdateData = this.#schema.parseForUpdate(updateData as any, options?.upsert);
-
+    const parsedUpdateData = this.#schema.parseForUpdate(preCtx.update as any, options?.upsert);
     const result = await collection.findOneAndUpdate(
-      filter as Filter<OT>,
+      preCtx.filter as Filter<OT>,
       parsedUpdateData as UpdateFilter<OT>,
       options ?? {},
     );
+
+    await this.#runPost("findOneAndUpdate", {
+      filter: preCtx.filter,
+      update: preCtx.update,
+      result,
+    });
+
     return result;
   }
 
@@ -585,10 +667,18 @@ export class MongsterModel<
 
     if (options?.upsert && !this.#indexSynced) await this.syncIndexes();
 
-    const collection = this.getCollection();
-    const parsedData = this.#schema.parse(replacement) as WithoutId<OT>;
+    const preCtx = await this.#runPre("replaceOne", { filter, replacement });
 
-    const result = await collection.replaceOne(filter as Filter<OT>, parsedData, options);
+    const collection = this.getCollection();
+    const parsedData = this.#schema.parse(preCtx.replacement) as WithoutId<OT>;
+    const result = await collection.replaceOne(preCtx.filter as Filter<OT>, parsedData, options);
+
+    await this.#runPost("replaceOne", {
+      filter: preCtx.filter,
+      replacement: preCtx.replacement,
+      result,
+    });
+
     return result;
   }
 
@@ -612,14 +702,22 @@ export class MongsterModel<
 
     if (options?.upsert && !this.#indexSynced) await this.syncIndexes();
 
-    const collection = this.getCollection();
-    const parsedData = this.#schema.parse(replacement) as WithoutId<OT>;
+    const preCtx = await this.#runPre("findOneAndReplace", { filter, replacement });
 
+    const collection = this.getCollection();
+    const parsedData = this.#schema.parse(preCtx.replacement) as WithoutId<OT>;
     const result = await collection.findOneAndReplace(
-      filter as Filter<OT>,
+      preCtx.filter as Filter<OT>,
       parsedData,
       options ?? {},
     );
+
+    await this.#runPost("findOneAndReplace", {
+      filter: preCtx.filter,
+      replacement: preCtx.replacement,
+      result,
+    });
+
     return result;
   }
 
@@ -643,8 +741,10 @@ export class MongsterModel<
 
     if (!this.#indexSynced) await this.syncIndexes();
 
+    const preCtx = await this.#runPre("upsertOne", { filter, doc: updateData as T });
+
     const collection = this.getCollection();
-    const parsedData = this.#schema.parse(updateData);
+    const parsedData = this.#schema.parse(preCtx.doc);
 
     const { _id, ...dataWithoutId } = parsedData;
     const updateFilter = { $set: dataWithoutId } as UpdateFilter<OT>;
@@ -652,10 +752,13 @@ export class MongsterModel<
       (updateFilter as UpdateFilter<any>).$setOnInsert = { _id };
     }
 
-    const result = await collection.updateOne(filter as Filter<OT>, updateFilter, {
+    const result = await collection.updateOne(preCtx.filter as Filter<OT>, updateFilter, {
       ...options,
       upsert: true,
     });
+
+    await this.#runPost("upsertOne", { filter: preCtx.filter, doc: preCtx.doc, result });
+
     return result;
   }
 
@@ -667,9 +770,13 @@ export class MongsterModel<
       throw new QueryError("deleteOne: filter cannot be an array");
     }
 
-    const collection = this.getCollection();
+    const preCtx = await this.#runPre("deleteOne", { filter });
 
-    const result = await collection.deleteOne(filter as Filter<OT>, options);
+    const collection = this.getCollection();
+    const result = await collection.deleteOne(preCtx.filter as Filter<OT>, options);
+
+    await this.#runPost("deleteOne", { filter: preCtx.filter, result });
+
     return result;
   }
 
@@ -681,9 +788,13 @@ export class MongsterModel<
       throw new QueryError("deleteMany: filter cannot be an array");
     }
 
-    const collection = this.getCollection();
+    const preCtx = await this.#runPre("deleteMany", { filter });
 
-    const result = await collection.deleteMany(filter as Filter<OT>, options);
+    const collection = this.getCollection();
+    const result = await collection.deleteMany(preCtx.filter as Filter<OT>, options);
+
+    await this.#runPost("deleteMany", { filter: preCtx.filter, result });
+
     return result;
   }
 
@@ -698,9 +809,13 @@ export class MongsterModel<
       throw new QueryError("findOneAndDelete: filter cannot be an array");
     }
 
-    const collection = this.getCollection();
+    const preCtx = await this.#runPre("findOneAndDelete", { filter });
 
-    const result = await collection.findOneAndDelete(filter as Filter<OT>, options ?? {});
+    const collection = this.getCollection();
+    const result = await collection.findOneAndDelete(preCtx.filter as Filter<OT>, options ?? {});
+
+    await this.#runPost("findOneAndDelete", { filter: preCtx.filter, result });
+
     return result;
   }
 

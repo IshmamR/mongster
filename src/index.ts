@@ -14,6 +14,15 @@ export {
   TransactionError,
   ValidationError,
 } from "./error";
+export type {
+  HookGroupAlias,
+  HookName,
+  HookOperation,
+  PostHookContextMap,
+  PostHookFn,
+  PreHookContextMap,
+  PreHookFn,
+} from "./types/types.hooks";
 export type { MongsterTransaction, MongsterTransactionContext } from "./types/types.transaction";
 
 export const M = new MongsterSchemaBuilder();

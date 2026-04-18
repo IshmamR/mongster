@@ -26,7 +26,7 @@ export interface MongsterTransactionContext {
   /**
    * Build a model scoped to this transaction
    * @param model The model to wrap with transaction context
-   * @returns Transaction-scoped model that automatically uses the session
+   * @returns transaction-scoped model that automatically uses the session
    */
   use<
     CN extends string,

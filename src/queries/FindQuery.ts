@@ -1,4 +1,12 @@
-import type { FindCursor, Sort } from "mongodb";
+import type {
+  Abortable,
+  Collection,
+  Document,
+  Filter,
+  FindCursor,
+  FindOptions,
+  Sort,
+} from "mongodb";
 import { QueryError } from "../error";
 import type {
   AllProjKeys,
@@ -11,71 +19,100 @@ import type {
 type PromiseOnFulfilled<Res> = ((value: Res[]) => Res[] | PromiseLike<Res[]>) | null | undefined;
 type PromiseOnRejected = ((reason: unknown) => PromiseLike<never>) | null | undefined;
 
-export class FindQuery<T, OT> {
-  #cursor: FindCursor<OT>;
+export interface FindQueryHooks<OT> {
+  preExec: (ctx: { filter: any }) => Promise<{ filter: any }>;
+  postExec: (ctx: { filter: any; result: OT[] }) => Promise<void>;
+}
+
+export class FindQuery<T, OT extends Document = Document> {
+  #collection: Collection<OT>;
+  #filter: Filter<OT>;
+  #findOptions?: FindOptions & Abortable;
+  #sortSpec?: Sort;
+  #limitN?: number;
+  #skipN?: number;
+  #hooks?: FindQueryHooks<OT>;
 
   projection?: ProjectionRecord<OT>;
 
-  constructor(cursor: FindCursor<OT>, projection?: typeof this.projection) {
-    this.#cursor = cursor;
-    this.projection = projection;
+  constructor(
+    collection: Collection<OT>,
+    filter: Filter<OT>,
+    options?: FindOptions & Abortable,
+    hooks?: FindQueryHooks<OT>,
+  ) {
+    this.#collection = collection;
+    this.#filter = filter;
+    this.#findOptions = options;
+    this.#hooks = hooks;
   }
 
-  getCursor() {
-    return this.#cursor;
+  #buildCursor(filter?: Filter<OT>): FindCursor<OT> {
+    let cursor = this.#collection.find<OT>(filter ?? this.#filter, this.#findOptions);
+    if (this.#sortSpec) cursor = cursor.sort(this.#sortSpec);
+    if (this.#limitN !== undefined) cursor = cursor.limit(this.#limitN);
+    if (this.#skipN !== undefined) cursor = cursor.skip(this.#skipN);
+    if (this.projection) cursor = cursor.project(this.projection) as FindCursor<OT>;
+    return cursor;
   }
 
-  sort(sort: SchemaSort<T>) {
-    this.#cursor = this.#cursor.sort(sort as Sort);
+  getCursor(): FindCursor<OT> {
+    return this.#buildCursor();
+  }
+
+  sort(sort: SchemaSort<T>): this {
+    this.#sortSpec = sort as Sort;
     return this;
   }
 
-  limit(n: number) {
+  limit(n: number): this {
     if (typeof n !== "number" || !Number.isInteger(n) || n <= 0) {
       throw new QueryError("Limit must be a positive integer");
     }
-    this.#cursor = this.#cursor.limit(n);
+    this.#limitN = n;
     return this;
   }
 
-  skip(n: number) {
+  skip(n: number): this {
     if (typeof n !== "number" || !Number.isInteger(n) || n <= 0) {
       throw new QueryError("Skip must be a positive integer");
     }
-    this.#cursor = this.#cursor.skip(n);
+    this.#skipN = n;
     return this;
   }
 
-  include<K extends AllProjKeys<OT>>(paths: K[]) {
+  include<K extends AllProjKeys<OT>>(paths: K[]): FindQuery<T, ProjectionFromInclusionKeys<OT, K>> {
     for (const path of paths) {
       if (typeof path !== "string") continue;
       if (path.trim() === "") continue;
-      if (typeof this.projection !== "undefined") {
+      if (this.projection !== undefined) {
         this.projection[path] = 1;
       } else {
         this.projection = { [path]: 1 } as { [IK in AllProjKeys<OT>]: 1 };
       }
     }
 
-    return this as FindQuery<T, ProjectionFromInclusionKeys<OT, K>>;
+    return this as unknown as FindQuery<T, ProjectionFromInclusionKeys<OT, K>>;
   }
 
-  exclude<K extends AllProjKeys<OT>>(paths: K[]) {
+  exclude<K extends AllProjKeys<OT>>(paths: K[]): FindQuery<T, ProjectionFromExclusionKeys<OT, K>> {
     for (const path of paths) {
       if (typeof path !== "string") continue;
       if (path.trim() === "") continue;
-      if (typeof this.projection !== "undefined") {
+      if (this.projection !== undefined) {
         this.projection[path] = 0;
       } else {
         this.projection = { [path]: 0 } as { [EK in AllProjKeys<OT>]: 0 };
       }
     }
 
-    return this as FindQuery<T, ProjectionFromExclusionKeys<OT, K>>;
+    return this as unknown as FindQuery<T, ProjectionFromExclusionKeys<OT, K>>;
   }
 
-  project<ReturnType = OT>(projection: ProjectionRecord<OT>) {
-    if (typeof this.projection !== "undefined") {
+  project<ReturnType extends Document = OT>(
+    projection: ProjectionRecord<OT>,
+  ): FindQuery<T, ReturnType> {
+    if (this.projection !== undefined) {
       this.projection = { ...this.projection, ...projection };
     } else {
       this.projection = projection;
@@ -84,11 +121,22 @@ export class FindQuery<T, OT> {
     return this as unknown as FindQuery<T, ReturnType>;
   }
 
-  exec(): Promise<OT[]> {
-    if (typeof this.projection !== "undefined") {
-      this.#cursor = this.#cursor.project(this.projection) as FindCursor<OT>;
+  async exec(): Promise<OT[]> {
+    let filter = this.#filter;
+
+    if (this.#hooks) {
+      const preCtx = await this.#hooks.preExec({ filter });
+      filter = preCtx.filter;
     }
-    return this.#cursor.toArray();
+
+    const cursor = this.#buildCursor(filter);
+    const results = await cursor.toArray();
+
+    if (this.#hooks) {
+      await this.#hooks.postExec({ filter, result: results });
+    }
+
+    return results;
   }
 
   // biome-ignore lint/suspicious/noThenProperty: cz I need it
@@ -100,7 +148,7 @@ export class FindQuery<T, OT> {
     return this.exec().catch(reject);
   }
 
-  async explain(): Promise<any> {
-    return this.#cursor.explain();
+  async explain(): Promise<Document> {
+    return this.#buildCursor().explain();
   }
 }

@@ -283,18 +283,18 @@ export class ArraySchema<T, I> extends MongsterSchemaInternal<T[], I[]> {
   }
 
   parse(v: unknown): T[] {
-    if (typeof v === "undefined") {
-      if (typeof this.#checks.default !== "undefined") return this.#checks.default;
+    if (v === undefined) {
+      if (this.#checks.default !== undefined) return this.#checks.default;
       if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
     if (!Array.isArray(v)) throw new SchemaError("Expected an array");
 
     const arrLength = v.length;
-    if (typeof this.#checks.min !== "undefined" && arrLength < this.#checks.min) {
+    if (this.#checks.min !== undefined && arrLength < this.#checks.min) {
       throw new SchemaError(`Array length must be greater than or equal to ${this.#checks.min}`);
     }
-    if (typeof this.#checks.max !== "undefined" && arrLength > this.#checks.max) {
+    if (this.#checks.max !== undefined && arrLength > this.#checks.max) {
       throw new SchemaError(`Array length must be less than or equal to ${this.#checks.max}`);
     }
 
@@ -302,9 +302,7 @@ export class ArraySchema<T, I> extends MongsterSchemaInternal<T[], I[]> {
       try {
         return this.#shapes.parse(x);
       } catch (err) {
-        throw new SchemaError(`[${i}] ${(err as Error).message}`, {
-          cause: err,
-        });
+        throw new SchemaError(`[${i}] ${(err as Error).message}`, { cause: err });
       }
     });
   }
@@ -315,10 +313,10 @@ export class ArraySchema<T, I> extends MongsterSchemaInternal<T[], I[]> {
     if (!Array.isArray(v)) throw new SchemaError("Expected an array");
 
     const arrLength = v.length;
-    if (typeof this.#checks.min !== "undefined" && arrLength < this.#checks.min) {
+    if (this.#checks.min !== undefined && arrLength < this.#checks.min) {
       throw new SchemaError(`Array length must be greater than or equal to ${this.#checks.min}`);
     }
-    if (typeof this.#checks.max !== "undefined" && arrLength > this.#checks.max) {
+    if (this.#checks.max !== undefined && arrLength > this.#checks.max) {
       throw new SchemaError(`Array length must be less than or equal to ${this.#checks.max}`);
     }
 
@@ -329,9 +327,7 @@ export class ArraySchema<T, I> extends MongsterSchemaInternal<T[], I[]> {
         if (parsed === undefined) return this.#shapes.parse(x);
         return parsed;
       } catch (err) {
-        throw new SchemaError(`[${i}] ${(err as Error).message}`, {
-          cause: err,
-        });
+        throw new SchemaError(`[${i}] ${(err as Error).message}`, { cause: err });
       }
     });
   }

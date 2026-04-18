@@ -4,23 +4,22 @@ export interface MongsterIssue {
 }
 
 const MONGSTER_ERROR_CODE = {
-  SCHEMA: "SCHEMA_ERROR",
-  VALIDATION: "VALIDATION_ERROR",
-  QUERY: "QUERY_ERROR",
-  CONNECTION: "CONNECTION_ERROR",
-  TRANSACTION: "TRANSACTION_ERROR",
-  INDEX_SYNC: "INDEX_SYNC_ERROR",
+  SCHEMA: "schema_error",
+  VALIDATION: "validation_error",
+  QUERY: "query_error",
+  CONNECTION: "connection_error",
+  TRANSACTION: "transaction_error",
+  INDEX_SYNC: "index_sync_error",
 } as const;
 const mongsterErrorCodes = Object.values(MONGSTER_ERROR_CODE);
-
 export type MongsterErrorCode = (typeof mongsterErrorCodes)[number];
 
 /**
- * Base error class for all Mongster errors.
+ * base error class for all Mongster errors
  */
 export class MongsterError extends Error {
   /**
-   * Toggle stack trace capture for all `MongsterError` instances.
+   * to toggle stack trace capture for all `MongsterError` instances.
    * ```ts
    * MongsterError.stackTraces = false; // disable (e.g. on production for a little less overhead)
    * MongsterError.stackTraces = true;  // enable  (default)
@@ -51,8 +50,8 @@ export class MongsterError extends Error {
   constructor(
     code: MongsterErrorCode,
     msgOrIssueOrIssues: string | MongsterIssue | MongsterIssue[],
-    maybeMessageOrOptions?: string | ErrorOptions,
-    maybeOptions?: ErrorOptions,
+    maybeMsgOrOpts?: string | ErrorOptions,
+    maybeOpts?: ErrorOptions,
   ) {
     let normalizedIssues: MongsterIssue[];
     let message: string;
@@ -62,7 +61,7 @@ export class MongsterError extends Error {
       // signature: (code, message, options?)
       message = msgOrIssueOrIssues;
       normalizedIssues = [{ message }];
-      options = maybeMessageOrOptions as ErrorOptions | undefined;
+      if (typeof maybeMsgOrOpts !== "string") options = maybeMsgOrOpts;
     } else {
       // signature: (code, issue | issues, [message? | options?], [options?])
       normalizedIssues = Array.isArray(msgOrIssueOrIssues)
@@ -70,14 +69,11 @@ export class MongsterError extends Error {
         : [msgOrIssueOrIssues];
 
       message =
-        typeof maybeMessageOrOptions === "string"
-          ? maybeMessageOrOptions
+        typeof maybeMsgOrOpts === "string"
+          ? maybeMsgOrOpts
           : (normalizedIssues[0]?.message ?? "Mongster error");
 
-      options =
-        typeof maybeMessageOrOptions === "string"
-          ? maybeOptions
-          : (maybeMessageOrOptions as ErrorOptions | undefined);
+      options = typeof maybeMsgOrOpts === "string" ? maybeOpts : maybeMsgOrOpts;
     }
 
     super(message, options);
@@ -93,13 +89,13 @@ export class MongsterError extends Error {
   }
 }
 
-// ── ── ── ── ── ── ── ── ──
-// ─ Specialized subclasses ─
-// ── ── ── ── ── ── ── ── ──
+// -- -- -- -- -- -- -- -- --
+// - Specialized subclasses -
+// -- -- -- -- -- -- -- -- --
 
 /**
- * Thrown during schema `parse` / `parseForUpdate` when a value
- * fails type or constraint checks.
+ * thrown during schema `parse` / `parseForUpdate` when a value
+ * fails type or constraint checks
  */
 export class SchemaError extends MongsterError {
   constructor(message: string, options?: ErrorOptions) {
@@ -108,8 +104,9 @@ export class SchemaError extends MongsterError {
 }
 
 /**
- * Thrown when an update-operator object violates structural or
- * schema-level rules (e.g. `$inc` on a non-number field).
+ * thrown when an update-operator object violates structural or schema-level rules
+ *
+ * (e.g.: `$inc` on a non-number field)
  */
 export class ValidationError extends MongsterError {
   constructor(message: string, options?: ErrorOptions) {
@@ -118,8 +115,8 @@ export class ValidationError extends MongsterError {
 }
 
 /**
- * Thrown when a collection method receives invalid arguments
- * (wrong filter type, empty array, etc.).
+ * thrown when a collection method receives invalid arguments
+ * (wrong filter type, empty array, etc.)
  */
 export class QueryError extends MongsterError {
   constructor(message: string, options?: ErrorOptions) {
@@ -128,8 +125,8 @@ export class QueryError extends MongsterError {
 }
 
 /**
- * Thrown when the client cannot connect to (or loses connection with)
- * the MongoDB server.
+ * thrown when the client cannot connect to (or loses connection with)
+ * the MongoDB server
  */
 export class ConnectionError extends MongsterError {
   constructor(message: string, options?: ErrorOptions) {
@@ -138,8 +135,8 @@ export class ConnectionError extends MongsterError {
 }
 
 /**
- * Thrown when a transaction callback fails or when session
- * management encounters an error.
+ * thrown when a transaction callback fails or when session
+ * management encounters an error
  */
 export class TransactionError extends MongsterError {
   constructor(message: string, options?: ErrorOptions) {
@@ -148,10 +145,10 @@ export class TransactionError extends MongsterError {
 }
 
 /**
- * Thrown when automatic index synchronization fails.
+ * thrown when automatic index synchronization fails
  */
 export class IndexSyncError extends MongsterError {
   constructor(message: string, options?: ErrorOptions) {
-    super("INDEX_SYNC_ERROR", message, options);
+    super(MONGSTER_ERROR_CODE.INDEX_SYNC, message, options);
   }
 }

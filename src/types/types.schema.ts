@@ -19,7 +19,7 @@ export type ResolveTuple<T extends readonly unknown[]> = T extends readonly []
 export type Resolve<T> = T extends NoExpandType
   ? T
   : T extends readonly [unknown, ...unknown[]]
-    ? ResolveTuple<T> // fixed tuple
+    ? ResolveTuple<T> // tuple (fixed length array)
     : T extends readonly (infer U)[]
       ? Resolve<U>[] // variable-length array
       : T extends object
@@ -95,7 +95,7 @@ export interface SchemaMeta<Collection> {
   options: MongsterIndexOptions<Collection>;
 }
 
-export type TimestampBaseKeys = "createdAt" | "updatedAt";
+export type TimestampBaseKey = "createdAt" | "updatedAt";
 
 export interface TimestampConfig {
   createdAt?: boolean | string;
@@ -104,7 +104,7 @@ export interface TimestampConfig {
 
 type ResolveTimestampKey<
   C extends TimestampConfig | undefined,
-  K extends TimestampBaseKeys,
+  K extends TimestampBaseKey,
 > = C extends undefined
   ? K
   : K extends keyof C
@@ -165,16 +165,18 @@ type IsPlainObjectInput<I> = [I] extends [object]
 /**
  * Root schema inputs accept optional _id (provided or auto-generated)
  */
-type WithOptionalInputId<I> = IsPlainObjectInput<I> extends true
-  ? "_id" extends keyof I
-    ? Prettify<Omit<I, "_id"> & { _id?: I["_id"] }>
-    : Prettify<I & { _id?: ObjectId }>
-  : I;
+type WithOptionalInputId<I> =
+  IsPlainObjectInput<I> extends true
+    ? "_id" extends keyof I
+      ? Prettify<Omit<I, "_id"> & { _id?: I["_id"] }>
+      : Prettify<I & { _id?: ObjectId }>
+    : I;
 
 // createdAt/updatedAt are optional on input when present in schema input shape.
-type TimestampOptionalizedInput<I> = ContainsAll<keyof I, TimestampBaseKeys> extends true
-  ? OptionalizeIfPresent<I, TimestampBaseKeys>
-  : I;
+type TimestampOptionalizedInput<I> =
+  ContainsAll<keyof I, TimestampBaseKey> extends true
+    ? OptionalizeIfPresent<I, TimestampBaseKey>
+    : I;
 
 export type InferSchemaInputType<MS extends MongsterSchemaBase<any>> = MS extends {
   collectIndexes(): unknown;

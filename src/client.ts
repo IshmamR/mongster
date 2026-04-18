@@ -117,6 +117,9 @@ export class MongsterClient {
     this.#client = undefined;
   }
 
+  /**
+   * ping a db
+   */
   async ping(dbToPing = "admin"): Promise<boolean> {
     if (!this.#client) return false;
     try {
@@ -131,6 +134,9 @@ export class MongsterClient {
     return this.#connected;
   }
 
+  /**
+   * @returns the client from mongodb driver
+   */
   getClient(): MongoClient {
     if (!this.#client) throw new ConnectionError("Not connected");
     return this.#client;
