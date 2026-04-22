@@ -37,7 +37,7 @@ export const mongster = new MongsterClient();
 
 export { MongsterClient };
 
-export function model<CN extends string, SC extends MongsterSchema<any, any>>(
+export function model<CN extends string, SC extends MongsterSchema<any, any, any>>(
   name: CN,
   schema: SC,
 ) {

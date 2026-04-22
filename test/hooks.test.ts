@@ -716,4 +716,82 @@ describe("Hooks", () => {
       expect(model.insertOne({ name: "test" })).rejects.toThrow("post hook failure");
     });
   });
+
+  describe("BulkWrite hooks", () => {
+    test("pre/post bulkWrite fire correctly", async () => {
+      const schema = M.schema({
+        name: M.string(),
+        value: M.number(),
+      });
+
+      let preOps: any[] = [];
+      let postResult: any = null;
+
+      schema.pre("bulkWrite", (ctx) => {
+        preOps = ctx.operations;
+      });
+      schema.post("bulkWrite", (ctx) => {
+        postResult = ctx.result;
+      });
+
+      const model = client.model("hooks_bulkwrite", schema);
+
+      await model.bulkWrite([
+        { insertOne: { document: { name: "a", value: 1 } as any } },
+        { insertOne: { document: { name: "b", value: 2 } as any } },
+      ]);
+
+      expect(preOps.length).toBe(2);
+      expect(postResult).toBeDefined();
+      expect(postResult.insertedCount).toBe(2);
+    });
+
+    test("pre bulkWrite can modify operations", async () => {
+      const schema = M.schema({
+        name: M.string(),
+        tagged: M.boolean().default(false),
+      });
+
+      schema.pre("bulkWrite", (ctx) => {
+        const modified = ctx.operations.map((op: any) => {
+          if ("insertOne" in op) {
+            return {
+              insertOne: {
+                document: { ...op.insertOne.document, tagged: true },
+              },
+            };
+          }
+          return op;
+        });
+        return { operations: modified };
+      });
+
+      const model = client.model("hooks_bulkwrite_modify", schema);
+
+      await model.bulkWrite([{ insertOne: { document: { name: "x", tagged: false } as any } }]);
+
+      const all = await model.find({}).exec();
+      expect(all[0]?.tagged).toBe(true);
+    });
+
+    test("bulkWrite works in transactions", async () => {
+      const schema = M.schema({
+        name: M.string(),
+        amount: M.number(),
+      });
+
+      const model = client.model("hooks_bulkwrite_txn", schema);
+
+      await client.transaction(async (ctx) => {
+        const txModel = ctx.use(model);
+        await txModel.bulkWrite([
+          { insertOne: { document: { name: "txn-a", amount: 10 } as any } },
+          { insertOne: { document: { name: "txn-b", amount: 20 } as any } },
+        ]);
+      });
+
+      const count = await model.count();
+      expect(count).toBe(2);
+    });
+  });
 });

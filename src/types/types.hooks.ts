@@ -1,4 +1,6 @@
 import type {
+  AnyBulkWriteOperation,
+  BulkWriteResult,
   DeleteResult,
   Document,
   InsertManyResult,
@@ -21,13 +23,15 @@ export const modifyOperations = [
 ] as const;
 export const removeOperations = ["deleteOne", "deleteMany", "findOneAndDelete"] as const;
 export const findOperations = ["find", "findOne", "findById"] as const;
+export const bulkOperations = ["bulkWrite"] as const;
 
 /** all hook-able operations */
 export type HookOperation =
   | (typeof saveOperations)[number]
   | (typeof modifyOperations)[number]
   | (typeof removeOperations)[number]
-  | (typeof findOperations)[number];
+  | (typeof findOperations)[number]
+  | (typeof bulkOperations)[number];
 
 export type HookGroupAlias = "save" | "modify" | "remove";
 
@@ -58,6 +62,7 @@ export interface PreHookContextMap<I, O extends Document> {
   find: { filter: MongsterFilter<O> };
   findOne: { filter: MongsterFilter<O> };
   findById: { _id: WithId<O>["_id"] };
+  bulkWrite: { operations: AnyBulkWriteOperation<O>[] };
   // Group aliases; union of possible args
   save: { doc?: I; docs?: I[] };
   modify: {
@@ -113,6 +118,7 @@ export interface PostHookContextMap<I, O extends Document> {
   find: { filter: MongsterFilter<O>; result: O[] };
   findOne: { filter: MongsterFilter<O>; result: O | null };
   findById: { _id: WithId<O>["_id"]; result: O | null };
+  bulkWrite: { operations: AnyBulkWriteOperation<O>[]; result: BulkWriteResult };
   // Group aliases
   save: { doc?: I; docs?: I[]; result: unknown };
   modify: {

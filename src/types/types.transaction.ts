@@ -30,7 +30,7 @@ export interface MongsterTransactionContext {
    */
   use<
     CN extends string,
-    SC extends MongsterSchema<any, any>,
+    SC extends MongsterSchema<any, any, any>,
     T extends Document,
     OT extends Document,
   >(model: MongsterModel<CN, SC, T, OT>): TransactionModel<CN, SC, T, OT>;

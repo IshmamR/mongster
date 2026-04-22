@@ -54,6 +54,45 @@ export class ObjectIdSchema extends MongsterSchemaInternal<ObjectId, ObjectId> {
     if (v === undefined) return undefined;
     return this.parse(v);
   }
+
+  ref<M>(modelFn: () => M): RefObjectIdSchema<M> {
+    return new RefObjectIdSchema(this, modelFn);
+  }
+}
+
+export class RefObjectIdSchema<M> extends MongsterSchemaInternal<ObjectId, ObjectId> {
+  declare $type: ObjectId;
+  declare $input: ObjectId;
+  declare $refModel: M;
+  declare $brand: "RefObjectIdSchema";
+
+  #inner: ObjectIdSchema;
+  #modelFn: () => M;
+
+  constructor(inner: ObjectIdSchema, modelFn: () => M) {
+    super();
+    this.#inner = inner;
+    this.#modelFn = modelFn;
+    this.setIdxMeta(inner.getIdxMeta());
+  }
+
+  getModelFn(): () => M {
+    return this.#modelFn;
+  }
+
+  clone(): this {
+    const clone = new RefObjectIdSchema(this.#inner.clone(), this.#modelFn);
+    clone.setIdxMeta(this.getIdxMeta());
+    return clone as this;
+  }
+
+  parse(v: unknown): ObjectId {
+    return this.#inner.parse(v);
+  }
+
+  parseForUpdate(v: unknown): ObjectId | undefined {
+    return this.#inner.parseForUpdate(v);
+  }
 }
 
 interface Decimal128Checks {

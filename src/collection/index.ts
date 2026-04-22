@@ -1,7 +1,9 @@
 import type {
   Abortable,
   AggregateOptions,
+  AnyBulkWriteOperation,
   BulkWriteOptions,
+  BulkWriteResult,
   Collection,
   CollectionOptions,
   CountDocumentsOptions,
@@ -33,7 +35,9 @@ import type {
 import type { MongsterClient } from "../client";
 import { IndexSyncError, QueryError } from "../error";
 import { HookRegistry } from "../hooks";
+import { FindOneQuery } from "../queries/FindOneQuery";
 import { FindQuery } from "../queries/FindQuery";
+import { RefObjectIdSchema } from "../schema/bsons";
 import type { MongsterSchema } from "../schema/schema";
 import type { MongsterFilter, MongsterUpdateFilter } from "../types/types.filter";
 import type {
@@ -45,6 +49,7 @@ import type {
   PreHookFn,
 } from "../types/types.hooks";
 import type { SyncIndexResponse } from "../types/types.model";
+import type { RefMeta } from "../types/types.populate";
 import type { AllFilterKeys } from "../types/types.query";
 import type { InferSchemaInputType, InferSchemaType } from "../types/types.schema";
 
@@ -140,9 +145,12 @@ export interface SyncIndexProp {
   autoDrop?: boolean;
 }
 
+type SchemaShape<SC extends MongsterSchema<any, any, any>> =
+  SC extends MongsterSchema<infer Shape, any, any> ? Shape : never;
+
 export class MongsterModel<
   CN extends string,
-  SC extends MongsterSchema<any>,
+  SC extends MongsterSchema<any, any, any>,
   T extends Document = InferSchemaInputType<SC>,
   OT extends Document = InferSchemaType<SC>,
 > {
@@ -164,6 +172,20 @@ export class MongsterModel<
     this.#schema = schema;
     this.#connection = connection;
     this.#hooks = new HookRegistry();
+  }
+
+  #buildRefMap(): Map<string, RefMeta> {
+    const shape = this.#schema.getShape();
+    const map = new Map<string, RefMeta>();
+    for (const [key, fieldSchema] of Object.entries(shape)) {
+      if (fieldSchema instanceof RefObjectIdSchema) {
+        const modelFn = fieldSchema.getModelFn() as () => { getCollectionName(): string };
+        map.set(key, {
+          getCollectionName: () => modelFn().getCollectionName(),
+        });
+      }
+    }
+    return map;
   }
 
   pre<Op extends HookName>(op: Op, fn: PreHookFn<Op, T, OT>): this {
@@ -456,7 +478,10 @@ export class MongsterModel<
     return estimate;
   }
 
-  find(filter: MongsterFilter<OT> = {}, options?: FindOptions & Abortable): FindQuery<T, OT> {
+  find(
+    filter: MongsterFilter<OT> = {},
+    options?: FindOptions & Abortable,
+  ): FindQuery<T, OT, SchemaShape<SC>> {
     if (filter !== null && filter !== undefined && typeof filter !== "object") {
       throw new QueryError("find: filter must be an object");
     }
@@ -467,17 +492,28 @@ export class MongsterModel<
     const collection = this.getCollection();
 
     const hooks = {
-      preExec: async (ctx: { filter: any }) => this.#runPre("find", ctx),
-      postExec: async (ctx: { filter: any; result: OT[] }) => this.#runPost("find", ctx),
+      preExec: async ({ filter }: { filter: Filter<OT> }) => {
+        const ctx = await this.#runPre("find", { filter: filter as MongsterFilter<OT> });
+        return { filter: ctx.filter as Filter<OT> };
+      },
+      postExec: async ({ filter, result }: { filter: Filter<OT>; result: OT[] }) => {
+        await this.#runPost("find", { filter: filter as MongsterFilter<OT>, result });
+      },
     };
 
-    return new FindQuery<T, OT>(collection, filter as Filter<OT>, options, hooks);
+    return new FindQuery<T, OT, SchemaShape<SC>>(
+      collection,
+      filter as Filter<OT>,
+      options,
+      hooks,
+      this.#buildRefMap(),
+    );
   }
 
-  async findOne(
+  findOne(
     filter: MongsterFilter<OT>,
     options?: Omit<FindOneOptions, "timeoutMode"> & Abortable,
-  ): Promise<OT | null> {
+  ): FindOneQuery<T, OT, SchemaShape<SC>> {
     if (filter !== null && filter !== undefined && typeof filter !== "object") {
       throw new QueryError("findOne: filter must be an object");
     }
@@ -485,32 +521,56 @@ export class MongsterModel<
       throw new QueryError("findOne: filter cannot be an array");
     }
 
-    const preCtx = await this.#runPre("findOne", { filter });
-
     const collection = this.getCollection();
-    const result = await collection.findOne(preCtx.filter as Filter<OT>, options);
 
-    await this.#runPost("findOne", { filter: preCtx.filter, result });
+    const hooks = {
+      preExec: async (f: Filter<OT>) => {
+        const ctx = await this.#runPre("findOne", { filter: f as MongsterFilter<OT> });
+        return ctx.filter as Filter<OT>;
+      },
+      postExec: async (f: Filter<OT>, result: OT | null) => {
+        await this.#runPost("findOne", { filter: f as MongsterFilter<OT>, result });
+      },
+    };
 
-    return result;
+    return new FindOneQuery<T, OT, SchemaShape<SC>>(
+      collection,
+      filter as Filter<OT>,
+      options,
+      hooks,
+      this.#buildRefMap(),
+    );
   }
 
-  async findById(
+  findById(
     _id: WithId<OT>["_id"],
     options?: Omit<FindOneOptions, "timeoutMode"> & Abortable,
-  ): Promise<OT | null> {
+  ): FindOneQuery<T, OT, SchemaShape<SC>> {
     if (_id === null || _id === undefined) {
       throw new QueryError("findById: _id is required");
     }
 
-    const preCtx = await this.#runPre("findById", { _id });
-
     const collection = this.getCollection();
-    const result = await collection.findOne({ _id: preCtx._id } as Filter<OT>, options);
+    let currentId = _id;
 
-    await this.#runPost("findById", { _id: preCtx._id, result });
+    const hooks = {
+      preExec: async (_f: Filter<OT>) => {
+        const ctx = await this.#runPre("findById", { _id: currentId });
+        currentId = ctx._id;
+        return { _id: currentId } as Filter<OT>;
+      },
+      postExec: async (_f: Filter<OT>, result: OT | null) => {
+        await this.#runPost("findById", { _id: currentId, result });
+      },
+    };
 
-    return result;
+    return new FindOneQuery<T, OT, SchemaShape<SC>>(
+      collection,
+      { _id } as Filter<OT>,
+      options,
+      hooks,
+      this.#buildRefMap(),
+    );
   }
 
   async distinct(
@@ -831,5 +891,25 @@ export class MongsterModel<
 
     const result = collection.aggregate(pipeline, options);
     return result.toArray() as unknown as ReturnType;
+  }
+
+  async bulkWrite(
+    operations: AnyBulkWriteOperation<OT>[],
+    options?: BulkWriteOptions,
+  ): Promise<BulkWriteResult> {
+    if (!Array.isArray(operations)) {
+      throw new QueryError("bulkWrite: operations must be an array");
+    }
+
+    if (!this.#indexSynced) await this.syncIndexes();
+
+    const preCtx = await this.#runPre("bulkWrite", { operations });
+
+    const collection = this.getCollection();
+    const result = await collection.bulkWrite(preCtx.operations, options);
+
+    await this.#runPost("bulkWrite", { operations: preCtx.operations, result });
+
+    return result;
   }
 }

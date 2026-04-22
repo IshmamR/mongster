@@ -24,7 +24,7 @@ export class MongsterClient {
   #dbName: string | undefined;
   #connected = false;
 
-  #schemas = new Map<string, MongsterSchema<any, any>>();
+  #schemas = new Map<string, MongsterSchema<any, any, any>>();
   #models = new Map<string, MongsterModel<any, any, any, any>>();
 
   /**
@@ -51,7 +51,10 @@ export class MongsterClient {
     this.startSession = startSession;
   }
 
-  model<CN extends string, SC extends MongsterSchema<any, any>>(collectionName: CN, schema: SC) {
+  model<CN extends string, SC extends MongsterSchema<any, any, any>>(
+    collectionName: CN,
+    schema: SC,
+  ) {
     this.#schemas.set(collectionName, schema);
     const model = new MongsterModel(this, collectionName, schema);
     this.#models.set(collectionName, model);

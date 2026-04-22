@@ -1,4 +1,6 @@
 import type {
+  AnyBulkWriteOperation,
+  BulkWriteResult,
   ClientSession,
   ClientSessionOptions,
   Collection,
@@ -44,7 +46,7 @@ import type {
  */
 export class TransactionModel<
   CN extends string,
-  SC extends MongsterSchema<any>,
+  SC extends MongsterSchema<any, any, any>,
   T extends Document,
   OT extends Document,
 > {
@@ -157,14 +159,11 @@ export class TransactionModel<
     return this.#baseModel.find(filter, this.#injectSession(options));
   }
 
-  async findOne(
-    filter: MongsterFilter<OT>,
-    options?: FindOneTransactionOptions,
-  ): Promise<OT | null> {
+  findOne(filter: MongsterFilter<OT>, options?: FindOneTransactionOptions) {
     return this.#baseModel.findOne(filter, this.#injectSession(options));
   }
 
-  async findById(id: WithId<OT>["_id"], options?: FindByIdTransactionOptions): Promise<OT | null> {
+  findById(id: WithId<OT>["_id"], options?: FindByIdTransactionOptions) {
     return this.#baseModel.findById(id, this.#injectSession(options));
   }
 
@@ -185,6 +184,13 @@ export class TransactionModel<
     options?: AggregateTransactionOptions,
   ): Promise<ReturnType> {
     return this.#baseModel.aggregateRaw<ReturnType>(pipeline, this.#injectSession(options));
+  }
+
+  async bulkWrite(
+    operations: AnyBulkWriteOperation<OT>[],
+    options?: BulkWriteTransactionOptions,
+  ): Promise<BulkWriteResult> {
+    return this.#baseModel.bulkWrite(operations, this.#injectSession(options));
   }
 
   getCollection(): Collection<OT> {
