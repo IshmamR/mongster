@@ -80,10 +80,7 @@ describe("NullableSchema", () => {
 
 describe("Chaining Optional and Nullable", () => {
   test("should allow both null and undefined", () => {
-    const schema = M.string()
-      .enum(["mongster", "promethewz"] as const)
-      .nullable()
-      .optional();
+    const schema = M.string().enum(["mongster", "promethewz"]).nullable().optional();
 
     type TInput = InferSchemaInputType<typeof schema>;
     expectTypeOf<TInput>().toEqualTypeOf<"mongster" | "promethewz" | null | undefined>();
@@ -95,10 +92,7 @@ describe("Chaining Optional and Nullable", () => {
   });
 
   test("should work in the reverse order too", () => {
-    const schema = M.string()
-      .enum(["mongster", "promethewz"] as const)
-      .optional()
-      .nullable();
+    const schema = M.string().enum(["mongster", "promethewz"]).optional().nullable();
 
     type TInput = InferSchemaInputType<typeof schema>;
     expectTypeOf<TInput>().toEqualTypeOf<"mongster" | "promethewz" | null | undefined>();

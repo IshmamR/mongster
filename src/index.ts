@@ -14,16 +14,6 @@ export {
   TransactionError,
   ValidationError,
 } from "./error";
-export type {
-  HookGroupAlias,
-  HookName,
-  HookOperation,
-  PostHookContextMap,
-  PostHookFn,
-  PreHookContextMap,
-  PreHookFn,
-} from "./types/types.hooks";
-export type { MongsterTransaction, MongsterTransactionContext } from "./types/types.transaction";
 
 export const M = new MongsterSchemaBuilder();
 export const defineSchema = M.schema;
@@ -35,6 +25,7 @@ export namespace M {
 
 export const mongster = new MongsterClient();
 
+export { AggregateQuery } from "./queries/AggregateQuery";
 export { MongsterClient };
 
 export function model<CN extends string, SC extends MongsterSchema<any, any, any>>(

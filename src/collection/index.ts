@@ -35,6 +35,7 @@ import type {
 import type { MongsterClient } from "../client";
 import { IndexSyncError, QueryError } from "../error";
 import { HookRegistry } from "../hooks";
+import { AggregateQuery } from "../queries/AggregateQuery";
 import { FindOneQuery } from "../queries/FindOneQuery";
 import { FindQuery } from "../queries/FindQuery";
 import { RefObjectIdSchema } from "../schema/bsons";
@@ -877,6 +878,11 @@ export class MongsterModel<
     await this.#runPost("findOneAndDelete", { filter: preCtx.filter, result });
 
     return result;
+  }
+
+  aggregate(options?: AggregateOptions & Abortable): AggregateQuery<OT, OT> {
+    const collection = this.getCollection();
+    return new AggregateQuery<OT, OT>(collection, options);
   }
 
   async aggregateRaw<ReturnType = Document[]>(

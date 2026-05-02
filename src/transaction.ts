@@ -179,6 +179,10 @@ export class TransactionModel<
     return this.#baseModel.distinct(key, filter, this.#injectSession(options));
   }
 
+  aggregate(options?: AggregateTransactionOptions) {
+    return this.#baseModel.aggregate(this.#injectSession(options));
+  }
+
   async aggregateRaw<ReturnType = Document[]>(
     pipeline?: Document[],
     options?: AggregateTransactionOptions,

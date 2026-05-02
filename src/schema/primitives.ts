@@ -36,7 +36,7 @@ export class NumberSchema<TP extends number = number> extends MongsterSchemaInte
     return new NumberSchema<TP>({ ...this.#checks, max: n });
   }
 
-  enum<E extends TP>(e: E[]): NumberSchema<E> {
+  enum<const E extends TP>(e: E[]): NumberSchema<E> {
     return new NumberSchema({
       ...this.#checks,
       enum: e,
@@ -125,7 +125,7 @@ export class StringSchema<TP extends string = string> extends MongsterSchemaInte
     return new StringSchema<TP>({ ...this.#checks, max: n });
   }
 
-  enum<E extends string>(e: E[]): StringSchema<E> {
+  enum<const E extends string>(e: E[]): StringSchema<E> {
     return new StringSchema({
       ...this.#checks,
       enum: e,

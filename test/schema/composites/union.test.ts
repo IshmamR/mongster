@@ -34,10 +34,10 @@ describe("UnionSchema", () => {
 
   test("should work with complex schemas", () => {
     const schema = M.union(
-      M.object({ type: M.string().enum(["user"] as const), name: M.string() }),
+      M.object({ type: M.string().enum(["user"]), name: M.string() }),
       M.object({
-        type: M.string().enum(["admin"] as const),
-        permissions: M.array(M.string().enum(["read", "write", "execute"] as const)),
+        type: M.string().enum(["admin"]),
+        permissions: M.array(M.string().enum(["read", "write", "execute"])),
       }),
     );
 

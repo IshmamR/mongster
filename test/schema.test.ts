@@ -13,7 +13,7 @@ describe("Deeply Nested Structures", () => {
         id: M.string(),
         data: M.union(
           M.object({
-            type: M.string().enum(["text"] as const),
+            type: M.string().enum(["text"]),
             content: M.string(),
             metadata: M.object({
               length: M.number(),
@@ -21,7 +21,7 @@ describe("Deeply Nested Structures", () => {
             }).optional(),
           }),
           M.object({
-            type: M.string().enum(["image"] as const),
+            type: M.string().enum(["image"]),
             url: M.string(),
             dimensions: M.tuple([M.number(), M.string()]),
           }),

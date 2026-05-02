@@ -4,18 +4,12 @@ import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { MongsterClient } from "../src/client";
 import type { MongsterModel } from "../src/collection";
 import { MongsterSchemaBuilder } from "../src/schema";
+import { must } from "./__helper";
 
 const M = new MongsterSchemaBuilder();
 
 let replSet: MongoMemoryReplSet;
 let client: MongsterClient;
-
-function must<T>(value: T | null | undefined, message = "Expected value"): T {
-  if (value === null || value === undefined) {
-    throw new Error(message);
-  }
-  return value;
-}
 
 beforeAll(async () => {
   replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
@@ -124,7 +118,7 @@ describe("Population", () => {
 
     test("populate with select limits returned fields", async () => {
       const users = await User.find({ name: "Alice" })
-        .populate("favoritePost", { select: ["title"] as const })
+        .populate("favoritePost", { select: ["title"] })
         .exec();
 
       const post = must(users[0]?.favoritePost);
@@ -137,7 +131,7 @@ describe("Population", () => {
 
     test("populate with empty select returns only _id", async () => {
       const users = await User.find({ name: "Alice" })
-        .populate("favoritePost", { select: [] as const })
+        .populate("favoritePost", { select: [] })
         .exec();
 
       const post = must(users[0]?.favoritePost);
@@ -148,7 +142,7 @@ describe("Population", () => {
 
     test("populate with select can exclude _id", async () => {
       const users = await User.find({ name: "Alice" })
-        .populate("favoritePost", { select: ["title"] as const, excludeId: true })
+        .populate("favoritePost", { select: ["title"], excludeId: true })
         .exec();
 
       const post = must(users[0]?.favoritePost);
@@ -196,7 +190,7 @@ describe("Population", () => {
     test("populate with select on findOne", async () => {
       const user = must(
         await User.findOne({ name: "Alice" }).populate("favoritePost", {
-          select: ["title"] as const,
+          select: ["title"],
         }),
       );
       const favoritePost = must(user.favoritePost);

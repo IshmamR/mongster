@@ -1,292 +1,133 @@
-# Transaction API
+# Transactions
 
-Mongster provides a clean, intuitive transaction API with automatic session management and excellent developer experience.
+Mongster wraps MongoDB transactions with automatic commit / rollback and transaction-scoped models.
 
-## Features
+## Current API
 
-- 🔄 **Automatic Session Management** - No need to manually pass sessions around
-- ✨ **Clean Syntax** - Use `transaction.with(Model)` for automatic session injection
-- 🛡️ **Auto Commit/Rollback** - Transactions automatically commit on success or rollback on error
-- 🎯 **Type-Safe** - Full TypeScript support with proper type inference
-- 🔌 **Compatible** - Works with all MongoDB transaction options
+Use `mongster.transaction(async (ctx) => { ... })`.
+
+Examples below assume `User`, `Log`, and `Post` models are already defined.
+
+Inside the callback you get:
+
+- `ctx.session` for manual session passing
+- `ctx.use(Model)` for a transaction-scoped model with automatic session injection
 
 ## Basic Usage
 
-### Manual Session Passing
+### Recommended: `ctx.use(Model)`
 
 ```typescript
-import { mongster } from "mongster";
+await mongster.transaction(async (ctx) => {
+  const TxUser = ctx.use(User);
+  const TxLog = ctx.use(Log);
 
-const result = await mongster.transaction(async (ctx) => {
-  // Pass session manually to each operation
-  const user = await User.createOne(
-    { name: "Alice", email: "alice@example.com" },
-    { session: ctx.session }
-  );
-
-  await Transaction.createOne(
-    { userId: user._id, amount: 100, type: "credit" },
-    { session: ctx.session }
-  );
-
-  return user;
-});
-```
-
-### Automatic Session Injection (Recommended)
-
-```typescript
-const result = await mongster.transaction(async () => {
-  // Get transaction-scoped models
-  const TxUser = mongster.transaction.with(User);
-  const TxTransaction = mongster.transaction.with(Transaction);
-
-  // Session is automatically injected - no manual passing needed!
   const user = await TxUser.createOne({
     name: "Alice",
     email: "alice@example.com",
   });
 
-  await TxTransaction.createOne({
-    userId: user._id,
-    amount: 100,
-    type: "credit",
+  await TxLog.createOne({
+    userId: user?._id,
+    action: "created",
   });
-
-  return user;
 });
 ```
 
-## Complete Example: Money Transfer
+### Manual session passing
 
 ```typescript
-import { M, mongster, model } from "mongster";
+await mongster.transaction(async (ctx) => {
+  const user = await User.createOne(
+    { name: "Alice", email: "alice@example.com" },
+    { session: ctx.session },
+  );
 
-// Define schemas
-const userSchema = M.schema({
-  name: M.string(),
-  email: M.string(),
-  balance: M.number().default(0),
-}).withTimestamps();
+  await Log.createOne(
+    { userId: user?._id, action: "created" },
+    { session: ctx.session },
+  );
+});
+```
 
-const transactionSchema = M.schema({
-  userId: M.objectId(),
-  amount: M.number(),
-  type: M.string().enum(["debit", "credit"]),
-  description: M.string(),
-}).withTimestamps();
+## What Works in Transaction-Scoped Models
 
-const User = model("users", userSchema);
-const Transaction = model("transactions", transactionSchema);
+Transaction-scoped models currently support:
 
-// Connect to MongoDB (requires replica set for transactions)
-await mongster.connect("mongodb://localhost:27017/mydb?replicaSet=rs0");
+- `insertOne`, `insertMany`, `createOne`, `createMany`
+- `find`, `findOne`, `findById`
+- `updateOne`, `updateMany`, `findOneAndUpdate`
+- `replaceOne`, `findOneAndReplace`, `upsertOne`
+- `deleteOne`, `deleteMany`, `findOneAndDelete`
+- `count`, `distinct`
+- `aggregate`, `aggregateRaw`
+- `bulkWrite`
 
-// Perform a money transfer in a transaction
-async function transfer(fromEmail: string, toEmail: string, amount: number) {
-  try {
-    await mongster.transaction(async () => {
-      const TxUser = mongster.transaction.with(User);
-      const TxTransaction = mongster.transaction.with(Transaction);
+Query builders still work inside transactions:
 
-      // Find users
-      const fromUser = await TxUser.findOne({ email: fromEmail });
-      const toUser = await TxUser.findOne({ email: toEmail });
+```typescript
+await mongster.transaction(async (ctx) => {
+  const TxPost = ctx.use(Post);
 
-      if (!fromUser || !toUser) {
-        throw new Error("User not found");
-      }
+  const posts = await TxPost.find({ published: true }).populate("authorId");
 
-      if (fromUser.balance < amount) {
-        throw new Error("Insufficient balance");
-      }
+  const summary = await TxPost.aggregate()
+    .match({ published: true })
+    .group({ _id: "$category", total: { $sum: 1 } })
+    .exec();
 
-      // Debit from sender
-      await TxUser.updateOne(
-        { _id: fromUser._id },
-        { $inc: { balance: -amount } }
-      );
-
-      await TxTransaction.createOne({
-        userId: fromUser._id,
-        amount,
-        type: "debit",
-        description: `Transfer to ${toUser.name}`,
-      });
-
-      // Credit to receiver
-      await TxUser.updateOne(
-        { _id: toUser._id },
-        { $inc: { balance: amount } }
-      );
-
-      await TxTransaction.createOne({
-        userId: toUser._id,
-        amount,
-        type: "credit",
-        description: `Transfer from ${fromUser.name}`,
-      });
-
-      console.log("Transfer successful!");
-    });
-  } catch (error) {
-    console.error("Transfer failed:", error);
-    // Transaction automatically rolled back
-    throw error;
-  }
-}
-
-// Use it
-await transfer("alice@example.com", "bob@example.com", 50);
+  return { posts, summary };
+});
 ```
 
 ## Transaction Options
 
-You can pass MongoDB transaction options as the second parameter:
+Pass MongoDB transaction options as the second argument:
 
 ```typescript
 await mongster.transaction(
-  async () => {
-    const TxUser = mongster.transaction.with(User);
-    // Your transaction logic
-    return await TxUser.findOne({ email: "alice@example.com" });
+  async (ctx) => {
+    const TxUser = ctx.use(User);
+    return TxUser.findOne({ email: "alice@example.com" });
   },
   {
     readConcern: { level: "snapshot" },
     writeConcern: { w: "majority" },
     maxCommitTimeMS: 5000,
-  }
+  },
 );
 ```
 
 ## Error Handling
 
-Transactions automatically rollback on any error:
+Any error thrown inside the callback aborts the transaction.
 
 ```typescript
 try {
-  await mongster.transaction(async () => {
-    const TxUser = mongster.transaction.with(User);
+  await mongster.transaction(async (ctx) => {
+    const TxUser = ctx.use(User);
 
     await TxUser.createOne({ name: "Alice", email: "alice@example.com" });
 
-    // This error will trigger automatic rollback
-    throw new Error("Something went wrong");
+    throw new Error("boom");
   });
 } catch (error) {
-  console.error("Transaction rolled back:", error);
-  // No data was persisted
+  console.error("transaction rolled back", error);
 }
 ```
+
+Mongster rethrows transaction failures as `TransactionError`.
+
+## Caveats
+
+- transactions require a replica set or compatible sharded cluster
+- keep transactions short; avoid long waits or external network calls inside them
+- `ctx.use(Model)` is callback-scoped; do not hold transaction-scoped models after the callback resolves
+- aggregate hooks do not exist yet, including inside transactions
+- populate limitations still apply inside transactions: top-level ref fields only, no array-ref populate
 
 ## Requirements
 
-MongoDB transactions require:
-- MongoDB 4.0+ (for replica sets)
-- MongoDB 4.2+ (for sharded clusters)
-- Connection to a replica set or sharded cluster
-
-## API Reference
-
-### `mongster.transaction<T>(callback, options?): Promise<T>`
-
-Execute a transaction with automatic commit/rollback.
-
-**Parameters:**
-- `callback: (ctx: MongsterTransactionContext) => Promise<T>` - Transaction callback
-- `options?: TransactionOptions` - MongoDB transaction options
-
-**Returns:** `Promise<T>` - The value returned by the callback
-
-### `mongster.transaction.with<M>(model): MongsterTransactionModel<M>`
-
-Get a transaction-scoped version of a model with automatic session injection.
-
-**Parameters:**
-- `model: MongsterModel` - The model to wrap
-
-**Returns:** `MongsterTransactionModel` - Transaction-scoped model
-
-**Note:** Can only be called within a transaction callback.
-
-### `MongsterTransactionContext`
-
-```typescript
-interface MongsterTransactionContext {
-  session: ClientSession; // MongoDB client session
-}
-```
-
-## Best Practices
-
-1. **Use `transaction.with()` for cleaner code** - Avoid manually passing sessions
-2. **Keep transactions short** - Long-running transactions can cause performance issues
-3. **Handle errors appropriately** - Always wrap transactions in try-catch blocks
-4. **Return meaningful values** - Return data you need from the transaction callback
-5. **Avoid external API calls** - Don't make HTTP requests or other I/O inside transactions
-
-## Examples
-
-### Multi-Collection Operations
-
-```typescript
-await mongster.transaction(async () => {
-  const TxUser = mongster.transaction.with(User);
-  const TxOrder = mongster.transaction.with(Order);
-  const TxInventory = mongster.transaction.with(Inventory);
-
-  const user = await TxUser.findOne({ email: "customer@example.com" });
-  if (!user) throw new Error("User not found");
-
-  // Check inventory
-  const item = await TxInventory.findOne({ sku: "WIDGET-001" });
-  if (!item || item.quantity < 1) {
-    throw new Error("Out of stock");
-  }
-
-  // Create order
-  const order = await TxOrder.createOne({
-    userId: user._id,
-    items: [{ sku: "WIDGET-001", quantity: 1, price: 99.99 }],
-    total: 99.99,
-  });
-
-  // Decrement inventory
-  await TxInventory.updateOne(
-    { sku: "WIDGET-001" },
-    { $inc: { quantity: -1 } }
-  );
-
-  // Update user's order count
-  await TxUser.updateOne(
-    { _id: user._id },
-    { $inc: { orderCount: 1 } }
-  );
-
-  return order;
-});
-```
-
-### Conditional Logic in Transactions
-
-```typescript
-await mongster.transaction(async () => {
-  const TxUser = mongster.transaction.with(User);
-
-  const user = await TxUser.findOne({ email: "user@example.com" });
-
-  if (user.balance >= 100) {
-    // Deduct premium fee
-    await TxUser.updateOne(
-      { _id: user._id },
-      { $inc: { balance: -100 }, $set: { isPremium: true } }
-    );
-  } else {
-    // Set as free tier
-    await TxUser.updateOne(
-      { _id: user._id },
-      { $set: { isPremium: false } }
-    );
-  }
-});
-```
+- MongoDB 4.0+ for replica-set transactions
+- MongoDB 4.2+ for sharded-cluster transactions
+- connection string that targets a topology with transaction support
