@@ -46,20 +46,14 @@ export class FindOneQuery<
     const K extends RefFieldKeys<Shape>,
     const Select extends readonly PopulateSelectKeys<Shape, K>[] | undefined = undefined,
     const ExcludeId extends boolean | undefined = undefined,
-  >(
-    field: K,
-    options?: PopulateOptions<Shape, K, Select, ExcludeId>,
-  ): FindOneQuery<T, PopulateResult<OT, Shape, K, Select, ExcludeId>, Shape> {
+    const PopulateReturn = FindOneQuery<T, PopulateResult<OT, Shape, K, Select, ExcludeId>, Shape>,
+  >(field: K, options?: PopulateOptions<Shape, K, Select, ExcludeId>): PopulateReturn {
     this.#populates.push({
       field,
       select: options?.select,
       excludeId: options?.excludeId,
     });
-    return this as unknown as FindOneQuery<
-      T,
-      PopulateResult<OT, Shape, K, Select, ExcludeId>,
-      Shape
-    >;
+    return this as unknown as PopulateReturn;
   }
 
   async exec(): Promise<OT | null> {

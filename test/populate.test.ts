@@ -23,10 +23,10 @@ afterAll(async () => {
 });
 
 describe("Population", () => {
-  // --- schemas ---
   const postSchema = M.schema({
     title: M.string(),
     content: M.string(),
+    banners: M.object({ title: M.string(), img: M.string() }).array().default([]),
   });
 
   let Post!: MongsterModel<"pop_posts", typeof postSchema>;
@@ -47,7 +47,6 @@ describe("Population", () => {
 
   let Comment!: MongsterModel<"pop_comments", typeof commentSchema>;
 
-  // Shared test data
   let postId: ObjectId;
   let userId: ObjectId;
 
@@ -56,24 +55,15 @@ describe("Population", () => {
     User = client.model("pop_users", userSchema);
     Comment = client.model("pop_comments", commentSchema);
 
-    // Seed data
     const post = must(await Post.createOne({ title: "Hello World", content: "First post" }));
     postId = post._id;
 
     const user = must(await User.createOne({ name: "Alice", age: 30, favoritePost: postId }));
     userId = user._id;
 
-    // Orphan user with non-matching ref
-    await User.createOne({
-      name: "Orphan",
-      age: 25,
-      favoritePost: new ObjectId(),
-    });
+    await User.createOne({ name: "Orphan", age: 25, favoritePost: new ObjectId() });
   });
 
-  // --------------------------------------------------------
-  // find().populate()
-  // --------------------------------------------------------
   describe("find().populate()", () => {
     test("replaces ObjectId with referenced document", async () => {
       const users = await User.find({ name: "Alice" }).populate("favoritePost").exec();
@@ -97,12 +87,10 @@ describe("Population", () => {
       const users = await User.find({}).populate("favoritePost").sort({ name: 1 }).exec();
       expect(users.length).toBeGreaterThanOrEqual(2);
 
-      // Alice has matching ref
       const alice = must(users.find((u) => u.name === "Alice"));
       const alicePost = must(alice.favoritePost);
       expect(alicePost.title).toBe("Hello World");
 
-      // Orphan has non-matching ref
       const orphan = must(users.find((u) => u.name === "Orphan"));
       expect(orphan.favoritePost).toBeNull();
     });
@@ -111,7 +99,6 @@ describe("Population", () => {
       const users = await User.find({}).populate("favoritePost").sort({ name: 1 }).limit(1).exec();
 
       expect(users.length).toBe(1);
-      // Alice comes first alphabetically
       expect(users[0]?.name).toBe("Alice");
       expect(must(users[0]?.favoritePost).title).toBe("Hello World");
     });
@@ -123,9 +110,7 @@ describe("Population", () => {
 
       const post = must(users[0]?.favoritePost);
       expect(post.title).toBe("Hello World");
-      // _id always included
       expect(post._id).toBeDefined();
-      // content should NOT be present
       expect("content" in post).toBe(false);
     });
 
@@ -135,6 +120,7 @@ describe("Population", () => {
         .exec();
 
       const post = must(users[0]?.favoritePost);
+      expectTypeOf<typeof post>().toEqualTypeOf<{ _id: ObjectId }>();
       expect(post._id).toBeDefined();
       expect("title" in post).toBe(false);
       expect("content" in post).toBe(false);
@@ -161,13 +147,10 @@ describe("Population", () => {
     });
   });
 
-  // --------------------------------------------------------
-  // findOne().populate()
-  // --------------------------------------------------------
   describe("findOne().populate()", () => {
     test("replaces ObjectId with referenced document", async () => {
-      const user = must(await User.findOne({ name: "Alice" }).populate("favoritePost"));
-      const favoritePost = must(user.favoritePost);
+      const user = await User.findOne({ name: "Alice" }).populate("favoritePost");
+      const favoritePost = must(user?.favoritePost);
       expect(favoritePost).not.toBeInstanceOf(ObjectId);
       expect(favoritePost.title).toBe("Hello World");
     });
@@ -178,8 +161,8 @@ describe("Population", () => {
     });
 
     test("returns null for non-matching ref", async () => {
-      const user = must(await User.findOne({ name: "Orphan" }).populate("favoritePost"));
-      expect(user.favoritePost).toBeNull();
+      const user = await User.findOne({ name: "Orphan" }).populate("favoritePost");
+      expect(user?.favoritePost).toBeNull();
     });
 
     test("findOne without populate works as before", async () => {
@@ -188,29 +171,24 @@ describe("Population", () => {
     });
 
     test("populate with select on findOne", async () => {
-      const user = must(
-        await User.findOne({ name: "Alice" }).populate("favoritePost", {
-          select: ["title"],
-        }),
-      );
-      const favoritePost = must(user.favoritePost);
+      const user = await User.findOne({ name: "Alice" }).populate("favoritePost", {
+        select: ["title"],
+      });
+      const favoritePost = must(user?.favoritePost);
       expect(favoritePost.title).toBe("Hello World");
       expect("content" in favoritePost).toBe(false);
     });
   });
 
-  // --------------------------------------------------------
-  // findById().populate()
-  // --------------------------------------------------------
   describe("findById().populate()", () => {
     test("replaces ObjectId with referenced document", async () => {
-      const user = must(await User.findById(userId).populate("favoritePost"));
-      expect(must(user.favoritePost).title).toBe("Hello World");
+      const user = await User.findById(userId).populate("favoritePost");
+      expect(user?.favoritePost?.title).toBe("Hello World");
     });
 
     test("findById without populate works as before", async () => {
-      const user = must(await User.findById(userId));
-      expect(user.favoritePost).toBeInstanceOf(ObjectId);
+      const user = await User.findById(userId);
+      expect(user?.favoritePost).toBeInstanceOf(ObjectId);
     });
 
     test("findById returns null for non-existent id", async () => {
@@ -219,9 +197,6 @@ describe("Population", () => {
     });
   });
 
-  // --------------------------------------------------------
-  // Multiple populates
-  // --------------------------------------------------------
   describe("multiple populates", () => {
     test("chain populate on multiple ref fields", async () => {
       await Comment.createOne({
@@ -232,8 +207,7 @@ describe("Population", () => {
 
       const comments = await Comment.find({ text: "Great post!" })
         .populate("author")
-        .populate("post")
-        .exec();
+        .populate("post");
 
       expect(comments.length).toBeGreaterThan(0);
       const comment = comments[0];
@@ -244,18 +218,15 @@ describe("Population", () => {
     });
 
     test("multiple populates on findOne", async () => {
-      const comment = must(
-        await Comment.findOne({ text: "Great post!" }).populate("author").populate("post"),
-      );
+      const comment = await Comment.findOne({ text: "Great post!" })
+        .populate("author")
+        .populate("post");
 
-      expect(must(comment.author).name).toBe("Alice");
-      expect(must(comment.post).title).toBe("Hello World");
+      expect(comment?.author?.name).toBe("Alice");
+      expect(comment?.post?.title).toBe("Hello World");
     });
   });
 
-  // --------------------------------------------------------
-  // Hooks integration
-  // --------------------------------------------------------
   describe("hooks integration", () => {
     test("pre/post find hooks fire with populate", async () => {
       const tagSchema = M.schema({ label: M.string() });
@@ -281,7 +252,7 @@ describe("Population", () => {
       await Item.createOne({ name: "item1", tag: tag._id });
 
       const items = await Item.find({}).populate("tag").exec();
-      expect(must(items[0]?.tag).label).toBe("important");
+      expect(items[0]?.tag?.label).toBe("important");
       expect(hookCalls).toEqual(["pre-find", "post-find"]);
     });
 
@@ -305,8 +276,8 @@ describe("Population", () => {
       const cat = must(await Cat.createOne({ breed: "Persian" }));
       await Owner.createOne({ name: "Bob", cat: cat._id });
 
-      const owner = must(await Owner.findOne({ name: "Bob" }).populate("cat"));
-      expect(must(owner.cat).breed).toBe("Persian");
+      const owner = await Owner.findOne({ name: "Bob" }).populate("cat");
+      expect(owner?.cat?.breed).toBe("Persian");
       expect(preFired).toBe(true);
     });
 
@@ -320,7 +291,6 @@ describe("Population", () => {
         label: M.objectId().ref(() => Label),
       });
 
-      // Hook that adds active: true to all finds
       widgetSchema.pre("find", (ctx) => {
         return { filter: { ...ctx.filter, active: true } };
       });
@@ -339,9 +309,6 @@ describe("Population", () => {
     });
   });
 
-  // --------------------------------------------------------
-  // Error handling
-  // --------------------------------------------------------
   describe("error handling", () => {
     test("populate on non-ref field throws", async () => {
       // @ts-expect-error populate only accepts ref fields
@@ -354,9 +321,6 @@ describe("Population", () => {
     });
   });
 
-  // --------------------------------------------------------
-  // Transactions
-  // --------------------------------------------------------
   describe("transactions", () => {
     test("populate works inside transactions", async () => {
       const result = await client.transaction(async (ctx) => {
@@ -366,7 +330,6 @@ describe("Population", () => {
         const post = must(await txPost.createOne({ title: "Txn Post", content: "In transaction" }));
         await txUser.createOne({ name: "TxnUser", age: 20, favoritePost: post._id });
 
-        // Read inside transaction with populate
         const users = await txUser.find({ name: "TxnUser" }).populate("favoritePost").exec();
         return users;
       });
@@ -374,9 +337,8 @@ describe("Population", () => {
       expect(result.length).toBe(1);
       expect(must(must(result[0]).favoritePost).title).toBe("Txn Post");
 
-      // Verify data committed and visible outside transaction
-      const committed = must(await User.findOne({ name: "TxnUser" }).populate("favoritePost"));
-      expect(must(committed.favoritePost).title).toBe("Txn Post");
+      const committed = await User.findOne({ name: "TxnUser" }).populate("favoritePost");
+      expect(committed?.favoritePost?.title).toBe("Txn Post");
     });
 
     test("populate data rolls back on transaction failure", async () => {
@@ -398,18 +360,14 @@ describe("Population", () => {
         // expected
       }
 
-      // Verify nothing committed
+      // not a thing should be committed
       const user = await User.findOne({ name: uniqueName });
       expect(user).toBeNull();
     });
   });
 
-  // --------------------------------------------------------
-  // Schema ref declaration
-  // --------------------------------------------------------
   describe("ref declaration", () => {
     test("ref field still stores ObjectId in DB", async () => {
-      // Verify the raw DB document has ObjectId, not the populated doc
       const collection = User.getCollection();
       const rawDoc = must(await collection.findOne({ name: "Alice" }));
       expect(rawDoc.favoritePost).toBeInstanceOf(ObjectId);
@@ -429,18 +387,14 @@ describe("Population", () => {
     });
   });
 
-  // --------------------------------------------------------
-  // Array refs (not supported in v1)
-  // --------------------------------------------------------
+  // array refs are not supported rn. im tired
   describe("array refs (v1 limitation)", () => {
     test("array of ObjectIds is not populatable in v1", async () => {
-      // Array refs are deferred to v2. Verify no silent failure.
       const tagSchema = M.schema({ label: M.string() });
       const ArrTag = client.model("pop_arr_tags", tagSchema);
 
       const articleSchema = M.schema({
         title: M.string(),
-        // No .ref() on array — just raw ObjectId array
         tagIds: M.objectId().array(),
       });
 

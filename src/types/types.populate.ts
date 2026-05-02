@@ -39,9 +39,7 @@ type RefOutputForField<
   : never;
 
 export type RefFieldKeys<Shape extends Record<string, unknown>> = Extract<
-  {
-    [K in keyof Shape]: Shape[K] extends RefObjectIdSchema<any> ? K : never;
-  }[keyof Shape],
+  { [K in keyof Shape]: Shape[K] extends RefObjectIdSchema<any> ? K : never }[keyof Shape],
   string
 >;
 

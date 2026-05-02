@@ -137,16 +137,14 @@ export class FindQuery<
     const K extends RefFieldKeys<Shape>,
     const Select extends readonly PopulateSelectKeys<Shape, K>[] | undefined = undefined,
     const ExcludeId extends boolean | undefined = undefined,
-  >(
-    field: K,
-    options?: PopulateOptions<Shape, K, Select, ExcludeId>,
-  ): FindQuery<T, PopulateResult<OT, Shape, K, Select, ExcludeId>, Shape> {
+    PopulateReturn = FindQuery<T, PopulateResult<OT, Shape, K, Select, ExcludeId>, Shape>,
+  >(field: K, options?: PopulateOptions<Shape, K, Select, ExcludeId>): PopulateReturn {
     this.#populates.push({
       field,
       select: options?.select,
       excludeId: options?.excludeId,
     });
-    return this as unknown as FindQuery<T, PopulateResult<OT, Shape, K, Select, ExcludeId>, Shape>;
+    return this as unknown as PopulateReturn;
   }
 
   async exec(): Promise<OT[]> {
@@ -179,9 +177,8 @@ export class FindQuery<
     for (const spec of this.#populates) {
       const ref = this.#refMap.get(spec.field);
       if (!ref) {
-        throw new QueryError(
-          `populate: "${spec.field}" is not a ref field. Use .ref(() => Model) in the schema.`,
-        );
+        const errMsg = `populate: "${spec.field}" is not a ref field. Use .ref(() => Model) in the schema`;
+        throw new QueryError(errMsg);
       }
 
       const collectionName = ref.getCollectionName();
