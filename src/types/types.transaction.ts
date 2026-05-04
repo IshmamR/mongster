@@ -26,11 +26,11 @@ export interface MongsterTransactionContext {
   /**
    * Build a model scoped to this transaction
    * @param model The model to wrap with transaction context
-   * @returns Transaction-scoped model that automatically uses the session
+   * @returns transaction-scoped model that automatically uses the session
    */
   use<
     CN extends string,
-    SC extends MongsterSchema<any, any>,
+    SC extends MongsterSchema<any, any, any>,
     T extends Document,
     OT extends Document,
   >(model: MongsterModel<CN, SC, T, OT>): TransactionModel<CN, SC, T, OT>;
@@ -59,6 +59,7 @@ export type FindOneAndDeleteTransactionOptions = Omit<FindOneAndDeleteOptions, "
 };
 export type FindTransactionOptions = Omit<FindOptions, "session"> & Abortable;
 export type FindOneTransactionOptions = Omit<FindOneOptions, "session" | "timeoutMode"> & Abortable;
+export type FindByIdTransactionOptions = FindOneTransactionOptions;
 export type CountTransactionOptions = Omit<CountDocumentsOptions, "session"> & Abortable;
 export type DistinctTransactionOptions = Omit<DistinctOptions, "session">;
 export type AggregateTransactionOptions = Omit<AggregateOptions, "session"> & Abortable;

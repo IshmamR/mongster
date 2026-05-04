@@ -1,12 +1,10 @@
 # Contributing to Mongster
 
-Thank you for your interest in contributing to Mongster! 🎉
-
 ## Getting Started
 
 ### Prerequisites
 
-- **Bun** >= 1.2.20 (or Node.js >= 18)
+- **Bun** >= 1.3 (or Node.js >= 18)
 - **Git**
 - **MongoDB** (or MongoDB Memory Server for testing)
 
@@ -54,7 +52,7 @@ Branch naming conventions:
 ### 2. Make Your Changes
 
 - Write clear, readable code
-- Follow existing code style
+- Try to follow existing code style
 - Add tests for new features
 - Update documentation as needed
 
@@ -144,10 +142,12 @@ test("should create document with default values", async () => {
 
 ### Documentation
 
-- Update README.md for user-facing changes
+- Update README.md for all user-facing changes
 - Add JSDoc comments for public APIs
 - Include code examples
 - Update CHANGELOG.md for notable changes
+
+README.md is source of truth for package docs (currently). Keep contributor and maintainer workflow here in CONTRIBUTING.md.
 
 ## Pull Request Process
 
@@ -218,6 +218,80 @@ All submissions require review. We use GitHub pull requests for this purpose.
 Reviewers will check for:
 - ✅ Code quality and style
 - ✅ Test coverage
+
+## Maintainer Release Flow
+
+This project uses manual npm releases with an interactive helper script.
+
+### Prerequisites
+
+- Clean git working tree
+- npm account with publish permission for `mongster`
+- npm auth configured locally via `npm login`
+- Push access to repository
+
+### Recommended flow
+
+From repo root:
+
+```bash
+bun run release
+```
+
+The release script will:
+
+1. Read current version from `package.json`
+2. Compare against npm published versions
+3. Let you choose one of:
+   - release current version
+   - bump version (patch/minor/major/pre*)
+   - custom version
+4. Commit version bump if version changes
+5. Run `bun run prepublishOnly`
+6. Publish to npm
+   - stable versions use `latest`
+   - pre-release versions use `next`
+7. Create git tag `v<version>`
+8. Optionally push tag to `origin`
+
+### Manual flow
+
+```bash
+# 1) choose version
+npm version <x.y.z> --no-git-tag-version
+
+# 2) commit version bump
+git add package.json
+git commit -m "chore: bump version to <x.y.z>"
+
+# 3) run release checks
+bun run prepublishOnly
+
+# 4) publish
+npm publish --access public
+# prerelease example:
+# npm publish --access public --tag next
+
+# 5) tag + push
+git tag -a v<x.y.z> -m "Release v<x.y.z>"
+git push origin main
+git push origin v<x.y.z>
+```
+
+### Release checklist
+
+- README.md reflects current public API and limitations
+- CHANGELOG.md is updated
+- `bun run lint` passes
+- `bun run typecheck` passes
+- `bun run test` passes
+- `bun run build` passes
+- npm publish succeeds before pushing new tag
+
+### Notes
+
+- If local or remote tag already exists, release script will ask before replacing or deleting it.
+- If publish fails, do not push new tag.
 - ✅ Documentation completeness
 - ✅ Breaking changes
 - ✅ Performance implications

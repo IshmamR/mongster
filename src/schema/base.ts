@@ -1,5 +1,5 @@
 import type { Filter } from "mongodb";
-import { MError } from "../error";
+import { SchemaError } from "../error";
 import type { MongsterIndexDirection, SchemaMeta, ValidatorFunc } from "../types/types.schema";
 
 export abstract class MongsterSchemaBase<T, I = T & any> {
@@ -135,7 +135,7 @@ class CustomValidationSchema<T> extends MongsterSchemaInternal<T, T> {
   parse(v: unknown): T {
     const parsed = this.inner.parse(v);
     const validated = this.#validator(parsed);
-    if (!validated) throw new MError(this.#msg ?? `Custom validation failed`);
+    if (!validated) throw new SchemaError(this.#msg ?? `Custom validation failed`);
     return parsed;
   }
 
@@ -144,7 +144,7 @@ class CustomValidationSchema<T> extends MongsterSchemaInternal<T, T> {
     const parsed = this.inner.parseForUpdate(v);
     if (parsed === undefined) return undefined;
     const validated = this.#validator(parsed);
-    if (!validated) throw new MError(this.#msg ?? `Custom validation failed`);
+    if (!validated) throw new SchemaError(this.#msg ?? `Custom validation failed`);
     return parsed;
   }
 }
@@ -258,10 +258,12 @@ export class ArraySchema<T, I> extends MongsterSchemaInternal<T[], I[]> {
     return this.#shapes;
   }
 
+  /** Minimum allowed array length */
   min(n: number): ArraySchema<T, I> {
     return new ArraySchema(this.#shapes, { ...this.#checks, min: n });
   }
 
+  /** Maximum allowed array length */
   max(n: number): ArraySchema<T, I> {
     return new ArraySchema(this.#shapes, { ...this.#checks, max: n });
   }
@@ -281,28 +283,26 @@ export class ArraySchema<T, I> extends MongsterSchemaInternal<T[], I[]> {
   }
 
   parse(v: unknown): T[] {
-    if (typeof v === "undefined") {
-      if (typeof this.#checks.default !== "undefined") return this.#checks.default;
+    if (v === undefined) {
+      if (this.#checks.default !== undefined) return this.#checks.default;
       if (typeof this.#checks.defaultFn === "function") return this.#checks.defaultFn();
     }
 
-    if (!Array.isArray(v)) throw new MError("Expected an array");
+    if (!Array.isArray(v)) throw new SchemaError("Expected an array");
 
     const arrLength = v.length;
-    if (typeof this.#checks.min !== "undefined" && arrLength < this.#checks.min) {
-      throw new MError(`Array length must be greater than or equal to ${this.#checks.min}`);
+    if (this.#checks.min !== undefined && arrLength < this.#checks.min) {
+      throw new SchemaError(`Array length must be greater than or equal to ${this.#checks.min}`);
     }
-    if (typeof this.#checks.max !== "undefined" && arrLength > this.#checks.max) {
-      throw new MError(`Array length must be less than or equal to ${this.#checks.max}`);
+    if (this.#checks.max !== undefined && arrLength > this.#checks.max) {
+      throw new SchemaError(`Array length must be less than or equal to ${this.#checks.max}`);
     }
 
     return v.map((x, i) => {
       try {
         return this.#shapes.parse(x);
       } catch (err) {
-        throw new MError(`[${i}] ${(err as Error).message}`, {
-          cause: err,
-        });
+        throw new SchemaError(`[${i}] ${(err as Error).message}`, { cause: err });
       }
     });
   }
@@ -310,14 +310,14 @@ export class ArraySchema<T, I> extends MongsterSchemaInternal<T[], I[]> {
   parseForUpdate(v: unknown): T[] | undefined {
     if (v === undefined) return undefined;
 
-    if (!Array.isArray(v)) throw new MError("Expected an array");
+    if (!Array.isArray(v)) throw new SchemaError("Expected an array");
 
     const arrLength = v.length;
-    if (typeof this.#checks.min !== "undefined" && arrLength < this.#checks.min) {
-      throw new MError(`Array length must be greater than or equal to ${this.#checks.min}`);
+    if (this.#checks.min !== undefined && arrLength < this.#checks.min) {
+      throw new SchemaError(`Array length must be greater than or equal to ${this.#checks.min}`);
     }
-    if (typeof this.#checks.max !== "undefined" && arrLength > this.#checks.max) {
-      throw new MError(`Array length must be less than or equal to ${this.#checks.max}`);
+    if (this.#checks.max !== undefined && arrLength > this.#checks.max) {
+      throw new SchemaError(`Array length must be less than or equal to ${this.#checks.max}`);
     }
 
     return v.map((x, i) => {
@@ -327,9 +327,7 @@ export class ArraySchema<T, I> extends MongsterSchemaInternal<T[], I[]> {
         if (parsed === undefined) return this.#shapes.parse(x);
         return parsed;
       } catch (err) {
-        throw new MError(`[${i}] ${(err as Error).message}`, {
-          cause: err,
-        });
+        throw new SchemaError(`[${i}] ${(err as Error).message}`, { cause: err });
       }
     });
   }

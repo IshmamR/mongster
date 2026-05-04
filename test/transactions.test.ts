@@ -120,6 +120,21 @@ describe("Transaction API", () => {
     expect(logs[0]?.action).toBe("created");
   });
 
+  test("should support findById in transaction-scoped model", async () => {
+    const User = client.model("users_findbyid_tx", userSchema);
+
+    const created = await User.createOne({ name: "ById", email: "byid@test.com" });
+    if (!created) throw new Error("User creation failed");
+
+    await client.transaction(async (ctx) => {
+      const ScopedUser = ctx.use(User);
+      const found = await ScopedUser.findById(created._id);
+
+      expect(found?._id.toString()).toBe(created._id.toString());
+      expect(found?.email).toBe("byid@test.com");
+    });
+  });
+
   test("should handle complex multi-collection transactions", async () => {
     const User = client.model("users_complex", userSchema);
     const Log = client.model("logs_complex", logSchema);

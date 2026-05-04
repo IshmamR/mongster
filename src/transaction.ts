@@ -1,4 +1,6 @@
 import type {
+  AnyBulkWriteOperation,
+  BulkWriteResult,
   ClientSession,
   ClientSessionOptions,
   Collection,
@@ -26,6 +28,7 @@ import type {
   CountTransactionOptions,
   DeleteTransactionOptions,
   DistinctTransactionOptions,
+  FindByIdTransactionOptions,
   FindOneAndDeleteTransactionOptions,
   FindOneAndReplaceTransactionOptions,
   FindOneAndUpdateTransactionOptions,
@@ -39,11 +42,11 @@ import type {
 } from "./types/types.transaction";
 
 /**
- * Creates a transaction-scoped version of a model that automatically uses the session
+ * creates a transaction-scoped version of a model that automatically uses the session
  */
 export class TransactionModel<
   CN extends string,
-  SC extends MongsterSchema<any>,
+  SC extends MongsterSchema<any, any, any>,
   T extends Document,
   OT extends Document,
 > {
@@ -58,7 +61,9 @@ export class TransactionModel<
   #injectSession<O extends Record<string, any>>(options?: O): O & { session: ClientSession } {
     let opt = options;
     if (typeof options !== "object" || Array.isArray(options)) opt = undefined;
-    return { ...(opt ?? {}), session: this.session } as O & { session: ClientSession };
+    return { ...(opt ?? {}), session: this.session } as O & {
+      session: ClientSession;
+    };
   }
 
   async insertOne(
@@ -69,7 +74,7 @@ export class TransactionModel<
   }
 
   async insertMany(
-    inputArr: OptionalUnlessRequiredId<OT>[],
+    inputArr: OptionalUnlessRequiredId<T>[],
     options?: BulkWriteTransactionOptions,
   ): Promise<InsertManyResult<OT>> {
     return this.#baseModel.insertMany(inputArr, this.#injectSession(options));
@@ -154,11 +159,12 @@ export class TransactionModel<
     return this.#baseModel.find(filter, this.#injectSession(options));
   }
 
-  async findOne(
-    filter: MongsterFilter<OT>,
-    options?: FindOneTransactionOptions,
-  ): Promise<OT | null> {
+  findOne(filter: MongsterFilter<OT>, options?: FindOneTransactionOptions) {
     return this.#baseModel.findOne(filter, this.#injectSession(options));
+  }
+
+  findById(id: WithId<OT>["_id"], options?: FindByIdTransactionOptions) {
+    return this.#baseModel.findById(id, this.#injectSession(options));
   }
 
   async count(filter?: Filter<OT>, options?: CountTransactionOptions): Promise<number> {
@@ -173,11 +179,22 @@ export class TransactionModel<
     return this.#baseModel.distinct(key, filter, this.#injectSession(options));
   }
 
+  aggregate(options?: AggregateTransactionOptions) {
+    return this.#baseModel.aggregate(this.#injectSession(options));
+  }
+
   async aggregateRaw<ReturnType = Document[]>(
     pipeline?: Document[],
     options?: AggregateTransactionOptions,
   ): Promise<ReturnType> {
     return this.#baseModel.aggregateRaw<ReturnType>(pipeline, this.#injectSession(options));
+  }
+
+  async bulkWrite(
+    operations: AnyBulkWriteOperation<OT>[],
+    options?: BulkWriteTransactionOptions,
+  ): Promise<BulkWriteResult> {
+    return this.#baseModel.bulkWrite(operations, this.#injectSession(options));
   }
 
   getCollection(): Collection<OT> {

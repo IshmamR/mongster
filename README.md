@@ -1,515 +1,458 @@
-# Mongster
+<p align="center">
+  <img src="https://raw.githubusercontent.com/IshmamR/mongster/main/assets/mongster.svg" alt="Mongster logo" width="120" />
+</p>
 
-A type-safe MongoDB ODM (Object Document Mapper) for TypeScript with schema validation, automatic index management, and intuitive query building.
+<h1 align="center">Mongster</h1>
 
-## Features
+<p align="center">
+  Type-safe MongoDB ODM and Schema validator for TypeScript with hooks, typed populate, transactions, and <em>typed aggregation</em> builder.
+</p>
 
-- 🔒 **Fully Type-Safe** - End-to-end TypeScript support with complete type inference
-- 📝 **Schema Validation** - Runtime validation with automatic TypeScript type generation
-- 🔍 **Index Management** - Automatic index synchronization with MongoDB
-- 🎯 **Query Builder** - Fluent, type-safe query API with projection and filtering
-- 🔄 **Transactions** - ACID transactions with automatic session management
-- ⚡ **Optimized Performance** - Built with Bun, compatible with Node.js 18+
-- 🕒 **Timestamps** - Automatic `createdAt` and `updatedAt` field management
-- 🛡️ **Error Handling** - Comprehensive error types for better debugging
+<p align="center">
+  <a href="https://www.npmjs.com/package/mongster"><img src="https://img.shields.io/npm/v/mongster?color=23d4bc&label=npm" alt="npm version" /></a>
+  <a href="https://github.com/IshmamR/mongster/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/IshmamR/mongster/ci.yml?branch=main&label=CI" alt="CI status" /></a>
+  <a href="https://github.com/IshmamR/mongster/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/mongster" alt="License" /></a>
+  <a href="https://github.com/IshmamR/mongster/blob/main/package.json"><img src="https://img.shields.io/badge/node-%3E%3D18-339933" alt="Node >= 18" /></a>
+</p>
+
+<p align="center">
+  Schema-first DX on top of official MongoDB driver. Keep MongoDB semantics. Add strong types, runtime validation, and automatic index metadata in one place.
+</p>
+
+> [!NOTE]
+> Mongster is built for and with TypeScript for the modern AI era where types matter. 
+
+## Jump To
+
+- [Jump To](#jump-to)
+- [Why Mongster](#why-mongster)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Core Features](#core-features)
+- [Schema and Types](#schema-and-types)
+  - [Type Inference](#type-inference)
+  - [Index Automation](#index-automation)
+- [Querying and Populate](#querying-and-populate)
+- [Aggregation](#aggregation)
+- [Hooks](#hooks)
+- [Transactions](#transactions)
+  - [Recommended: `ctx.use(Model)`](#recommended-ctxusemodel)
+  - [Manual session passing](#manual-session-passing)
+  - [Transaction options](#transaction-options)
+- [Errors](#errors)
+- [Connection Management](#connection-management)
+- [API Overview](#api-overview)
+  - [Top-level exports](#top-level-exports)
+  - [Schema builder](#schema-builder)
+  - [Model / transaction-scoped model](#model--transaction-scoped-model)
+- [Limitations and Roadmap](#limitations-and-roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Why Mongster
+
+- One schema drives runtime validation, TypeScript inference, and index metadata.
+- <em>0 dependency</em>; Mongster is a small wrapper that works on the native Mongodb Nodejs driver. 
+- Query builders stay close to MongoDB while adding typed projections, populate, and aggregation helpers.
+- Transactions, hooks, and bulk operations work without switching to a separate API style.
 
 ## Installation
 
 ```bash
-npm install mongster
+npm install mongodb mongster
 # or
-bun add mongster
+bun add mongodb mongster
 # or
-yarn add mongster
+yarn add mongodb mongster
 # or
-pnpm add mongster
+pnpm add mongodb mongster
 ```
+
+Requires Node >= 18. Should work with other runtimes such as deno and bun.
 
 ## Quick Start
 
 ```typescript
-import { M, mongster, model } from "mongster";
+import { M, mongster } from "mongster";
 
-// Define your schema
 const userSchema = M.schema({
-  name: M.string(),
-  email: M.string(),
+  name: M.string().min(1),
+  email: M.string().uniqueIndex(),
   age: M.number().min(0).max(120),
-  address: M.object({
-    street: M.string(),
-    city: M.string(),
-    zip: M.number()
-  }).optional(),
-  tags: M.array(M.string()).optional()
+  gender: M.boolean(),
+  socials: M.array(
+    M.object({
+      host: M.string(),
+      link: M.string(),
+    }),
+  ).optional(),
 }).withTimestamps();
 
-// Create a model
-const User = model("users", userSchema);
+type User = M.infer<typeof userSchema>;
+type CreateUser = M.inferInput<typeof userSchema>;
 
-// Connect to MongoDB
-await mongster.connect("mongodb://localhost:27017/mydb");
+const UserModel = mongster.model("users", userSchema);
 
-// Create documents
-const user = await User.createOne({
-  name: "John Doe",
-  email: "john@example.com",
-  age: 30
+await mongster.connect("mongodb://localhost:27017/mongster");
+
+const created: User | null = await UserModel.createOne({
+  name: "Alice",
+  email: "alice@example.com",
+  age: 25,
+  socials: [{ host: "github", link: "https://github.com/alice" }],
 });
 
-// Query documents
-const users = await User.find({ age: { $gte: 18 } })
-  .include(["name", "email"])
+const adults = await UserModel.find({ age: { $gte: 18 } })
+  .include(["name", "email", "socials"])
+  .sort({ age: -1 })
   .limit(10);
+
+console.log(created, adults);
 ```
 
-## Schema Definition
+## Core Features
 
-### Basic Types
+| Area | What you get |
+| --- | --- |
+| Schema | `M.schema()`, primitives, BSON types, arrays, objects, tuples, unions, defaults, runtime validation |
+| Types | `M.infer`, `M.inferInput`, typed filters, typed updates, typed aggregation stages |
+| Querying | `find`, `findOne`, `findById`, include/exclude, sort, skip, limit, distinct, count, etc. |
+| "Relations" | `M.objectId().ref(() => Model)` plus typed populate on query builders |
+| Runtime | hooks, transaction-scoped models, automatic index sync, structured errors |
+
+## Schema and Types
 
 ```typescript
 import { M } from "mongster";
 
-const schema = M.schema({
-  // Primitives
-  name: M.string(),
-  age: M.number(),
-  active: M.boolean(),
-  birthDate: M.date(),
-  
-  // MongoDB Types
-  userId: M.objectId(),
-  data: M.binary(),
-  price: M.decimal128(),
-  
-  // Optional fields
-  nickname: M.string().optional(),
-  
-  // Default values
-  status: M.string().default("pending"),
-  createdAt: M.date().defaultFn(() => new Date()),
-});
-```
-
-### Validation
-
-```typescript
-const schema = M.schema({
-  // String validation
-  username: M.string().min(3).max(20),
-  email: M.string().match(/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/),
-  role: M.string().enum(["admin", "user", "guest"]),
-  
-  // Number validation
-  age: M.number().min(0).max(120),
-  score: M.number().enum([1, 2, 3, 4, 5]),
-  
-  // Boolean
-  verified: M.boolean(),
-});
-```
-
-### Nested Objects and Arrays
-
-```typescript
-const schema = M.schema({
-  // Nested objects
-  address: M.object({
-    street: M.string(),
-    city: M.string(),
-    coordinates: M.object({
-      lat: M.number(),
-      lng: M.number()
-    })
+const postSchema = M.schema({
+  title: M.string().min(3),
+  published: M.boolean().default(false),
+  views: M.number().default(0),
+  publishedAt: M.date().optional(),
+  authorId: M.objectId(),
+  price: M.decimal(),
+  attachments: M.array(M.binary()).optional(),
+  meta: M.object({
+    category: M.string(),
+    featured: M.boolean(),
   }),
-  
-  // Arrays
-  tags: M.array(M.string()),
-  scores: M.array(M.number()),
-  
-  // Array of objects
-  contacts: M.array(
-    M.object({
-      type: M.string(),
-      value: M.string()
-    })
-  ).optional(),
 });
-```
 
-### Timestamps
-
-```typescript
-const schema = M.schema({
-  name: M.string(),
-  email: M.string()
-}).withTimestamps(); // Adds createdAt and updatedAt
+type Post = M.infer<typeof postSchema>;
+type PostInput = M.inferInput<typeof postSchema>;
 ```
 
 ### Type Inference
 
-```typescript
-import type { M } from "mongster";
+`M.infer<typeof schema>` gives you the type for how the document is stored in the DB.
 
+`M.inferInput<typeof schema>` gives you the type for the create/update input shape.
+
+### Index Automation
+
+```typescript
 const userSchema = M.schema({
-  name: M.string(),
-  age: M.number()
-});
+  email: M.string().uniqueIndex(),
+  username: M.string().index(1),
+  lastLogin: M.date().index(-1),
+  bio: M.string().textIndex(),
+  hashKey: M.string().hashedIndex(),
+  expiresAt: M.date().ttl(3600),
+}).addIndex({ email: 1, username: 1 }, { unique: true });
 
-// Infer the output type (what you get from database)
-type User = M.infer<typeof userSchema>;
-// { name: string; age: number }
-
-// Infer the input type (what you provide when creating)
-type UserInput = M.inferInput<typeof userSchema>;
-// { name: string; age: number }
-```
-
-## Index Management
-
-Mongster automatically manages indexes for you, creating, updating, and optionally dropping indexes based on your schema definition.
-
-```typescript
-const schema = M.schema({
-  email: M.string().uniqueIndex(), // Unique index
-  username: M.string().index(1), // Ascending index
-  lastLogin: M.date().index(-1), // Descending index
-  content: M.string().textIndex(), // Text index for full-text search
-  location: M.string().hashedIndex(), // Hashed index
-  expiresAt: M.date().ttl(3600), // TTL index (expires after 1 hour)
-}).addIndex(
-  { email: 1, username: 1 }, // Compound index
-  { unique: true }
-);
-
-// Indexes are automatically synced when you connect
 await mongster.connect(uri, {
-  autoIndex: { syncOnConnect: true }
+  autoIndex: { syncOnConnect: true },
 });
-
-// Or manually sync indexes
-await User.syncIndexes();
 ```
 
-## CRUD Operations
+Define indexes in schema metadata. Let Mongster sync them on connect or manually with `syncIndexes()`.
 
-### Create
+## Querying and Populate
 
-```typescript
-// Insert one document
-const result = await User.insertOne({
-  name: "Alice",
-  email: "alice@example.com",
-  age: 25
-});
-
-// Create and return the document
-const user = await User.createOne({
-  name: "Bob",
-  email: "bob@example.com",
-  age: 30
-});
-
-// Insert multiple documents
-const results = await User.insertMany([
-  { name: "Charlie", email: "charlie@example.com", age: 28 },
-  { name: "Diana", email: "diana@example.com", age: 32 }
-]);
-
-// Create multiple and return documents
-const users = await User.createMany([
-  { name: "Eve", email: "eve@example.com", age: 27 },
-  { name: "Frank", email: "frank@example.com", age: 35 }
-]);
-```
-
-### Read
+> [!TIP]
+> `find()`, `findOne()`, and `findById()` return thenable query builders. Awaiting the query executes it. So you can chain methods, and share query chains across your project easily before execution.
 
 ```typescript
-// Find one document
-const user = await User.findOne({ email: "alice@example.com" });
-
-// Find multiple documents
-const users = await User.find({ age: { $gte: 25 } });
-
-// Find with query builder
-const results = await User.find({ age: { $gte: 18 } })
-  .include(["name", "email"]) // Include specific fields
-  .exclude(["_id"]) // Exclude fields
-  .sort({ age: -1 }) // Sort descending by age
+const userQuery = User.find({ age: { $gte: 18 } });
+const users = await userQuery
+  .include(["name", "email"]) // type-safe btw, even works for nested paths
+  .sort({ age: -1 })
   .skip(10)
   .limit(20);
 
-// Find by ID
-const user = await User.findById(someObjectId);
-
-// Count documents
-const count = await User.countDocuments({ active: true });
+const user = await User.findOne({ email: "alice@example.com" });
+const byId = await User.findById(someObjectId);
 ```
 
-### Update
+Declare refs with `M.objectId().ref(() => Model)`, then populate them from queries.
 
 ```typescript
-// Update one document
-const result = await User.updateOne(
-  { email: "alice@example.com" },
-  { $set: { age: 26 } }
-);
-
-// Update multiple documents
-const result = await User.updateMany(
-  { age: { $lt: 18 } },
-  { $set: { status: "minor" } }
-);
-
-// Find and update
-const updatedUser = await User.findOneAndUpdate(
-  { email: "bob@example.com" },
-  { $inc: { age: 1 } },
-  { returnDocument: "after" }
-);
-
-// Replace document
-const result = await User.replaceOne(
-  { _id: someId },
-  { name: "New Name", email: "new@example.com", age: 40 }
-);
-```
-
-### Delete
-
-```typescript
-// Delete one document
-const result = await User.deleteOne({ email: "alice@example.com" });
-
-// Delete multiple documents
-const result = await User.deleteMany({ age: { $lt: 18 } });
-
-// Find and delete
-const deletedUser = await User.findOneAndDelete({ email: "bob@example.com" });
-```
-
-## Connection Management
-
-```typescript
-import { MongsterClient } from "mongster";
-
-// Using the default client
-import { mongster } from "mongster";
-await mongster.connect("mongodb://localhost:27017/mydb");
-
-// Create a custom client
-const client = new MongsterClient();
-await client.connect("mongodb://localhost:27017/mydb", {
-  retryConnection: 3, // Retry connection 3 times
-  retryDelayMs: 500, // Wait 500ms between retries
-  autoIndex: { syncOnConnect: true }, // Sync indexes on connect
-  // ... other MongoDB client options
+const authorSchema = M.schema({
+  name: M.string(),
+  social: M.object({
+    github: M.string(),
+  }),
 });
 
-// Check connection
-const isConnected = await client.ping();
+const Author = mongster.model("authors", authorSchema);
 
-// Disconnect
-await client.disconnect();
+const postSchema = M.schema({
+  title: M.string(),
+  category: M.string(),
+  views: M.number(),
+  published: M.boolean(),
+  authorId: M.objectId().ref(() => Author),
+});
+
+const Post = mongster.model("posts", postSchema);
+
+const posts = await Post.find({ published: true }).populate("authorId");
+const selected = await Post.find({}).populate("authorId", {
+  select: ["name", "social.github"],
+  excludeId: true,
+});
 ```
+
+## Aggregation
+
+```typescript
+const report = await Post.aggregate()
+  .match({ published: true })
+  .group("$category",{
+    totalViews: { $sum: "$views" },
+    count: { $sum: 1 },
+  })
+  .sort({ totalViews: -1 })
+  .exec();
+
+const joined = await Post.aggregate()
+  .lookup({
+    from: Author,
+    localField: "authorId",
+    foreignField: "_id",
+    as: "authors",
+  })
+  .unwind("$authors")
+  .project({
+    _id: 0,
+    title: 1,
+    authorName: "$authors.name",
+  })
+  .exec();
+```
+
+Use `aggregate.raw()` when you need a fully manual pipeline or when you want to opt out of stage inference for advanced expressions.
+
+## Hooks
+
+Hooks work at schema level and model level.
+
+```typescript
+const userSchema = M.schema({
+  name: M.string(),
+  email: M.string(),
+});
+
+userSchema.pre("createOne", (ctx) => {
+  return {
+    doc: {
+      ...ctx.doc,
+      email: ctx.doc.email.toLowerCase(),
+    },
+  };
+});
+
+userSchema.post("find", (ctx) => {
+  console.log(`loaded ${ctx.result.length} users`);
+});
+```
+
+> [!NOTE]
+> Hook lifecycle are sequential:
+> 
+> model **(pre)** -> schema **(pre)** -> query -> schema **(post)** -> model **(post)** 
+
+<details>
+<summary>Supported hook operations</summary>
+
+- `insertOne`, `insertMany`, `createOne`, `createMany`
+- `find`, `findOne`, `findById`
+- `updateOne`, `updateMany`, `findOneAndUpdate`, `replaceOne`, `findOneAndReplace`, `upsertOne`
+- `deleteOne`, `deleteMany`, `findOneAndDelete`
+- `bulkWrite`
+- Group aliases: `save`, `modify`, `remove`
+
+</details>
 
 ## Transactions
 
-Mongster provides built-in transaction support with automatic session management:
+Mongster can wraps MongoDB transactions with automatic commit/rollback and transaction-scoped models via `ctx.use(Model)`.
+
+> [!IMPORTANT]
+> Transactions require a replica set or compatible sharded cluster.
+
+### Recommended: `ctx.use(Model)`
 
 ```typescript
-// Simple transaction
-await client.transaction(async (ctx) => {
-  const user = await User.createOne({ name: "Alice", email: "alice@example.com" }, ctx.session);
-  await Log.createOne({ userId: user._id, action: "created" }, ctx.session);
-});
+await mongster.transaction(async (ctx) => {
+  const TxUser = ctx.use(User);
+  const TxLog = ctx.use(Log);
 
-// Transaction with automatic session injection
-await client.transaction(async (ctx) => {
-  const ScopedUser = ctx.use(User);
-  const ScopedLog = ctx.use(Log);
-  
-  const user = await ScopedUser.createOne({ name: "Bob", email: "bob@example.com" });
-  await ScopedLog.createOne({ userId: user._id, action: "created" });
-});
-
-// Transaction with options
-await client.transaction(
-  async (ctx) => {
-    // ... transaction logic
-  },
-  { readConcern: { level: "snapshot" }, writeConcern: { w: "majority" } }
-);
-
-// Manual session management (advanced)
-const session = await client.startSession();
-try {
-  const user = await User.createOne({ name: "Charlie", email: "charlie@example.com" }, { session });
-  // ... more operations
-} finally {
-  await session.endSession();
-}
-```
-
-Transactions automatically handle commit/rollback and session cleanup. Use `ctx.use(model)` for automatic session injection, or pass `{ session }` manually to individual operations.
-
-## Advanced Filtering
-
-Mongster provides type-safe filtering with MongoDB query operators:
-
-```typescript
-// Comparison operators
-await User.find({ age: { $eq: 25 } });
-await User.find({ age: { $ne: 25 } });
-await User.find({ age: { $gt: 25 } });
-await User.find({ age: { $gte: 25 } });
-await User.find({ age: { $lt: 25 } });
-await User.find({ age: { $lte: 25 } });
-await User.find({ age: { $in: [25, 30, 35] } });
-await User.find({ age: { $nin: [25, 30] } });
-
-// Logical operators
-await User.find({ $and: [{ age: { $gte: 18 } }, { status: "active" }] });
-await User.find({ $or: [{ age: { $lt: 18 } }, { status: "inactive" }] });
-await User.find({ $not: { age: { $lt: 18 } } });
-
-// Array operators
-await User.find({ tags: { $all: ["javascript", "typescript"] } });
-await User.find({ tags: { $elemMatch: { $eq: "mongodb" } } });
-await User.find({ tags: { $size: 3 } });
-```
-
-## Error Handling
-
-```typescript
-import { MError } from "mongster";
-
-try {
-  const user = await User.createOne({
-    name: "Invalid",
-    age: 150 // Exceeds max value
+  const user = await TxUser.createOne({
+    name: "Alice",
+    email: "alice@example.com",
   });
+
+  await TxLog.createOne({
+    userId: user?._id,
+    action: "created",
+  });
+
+  const summary = await TxUser.aggregate()
+    .match({ email: "alice@example.com" })
+    .count("total");
+
+  return summary;
+});
+```
+
+### Manual session passing
+
+```typescript
+await mongster.transaction(async (ctx) => {
+  await User.createOne(
+    { name: "Bob", email: "bob@example.com" },
+    { session: ctx.session },
+  );
+});
+```
+
+### Transaction options
+
+```typescript
+await mongster.transaction(
+  async (ctx) => {
+    const TxUser = ctx.use(User);
+    return TxUser.findOne({ email: "alice@example.com" });
+  },
+  {
+    readConcern: { level: "snapshot" },
+    writeConcern: { w: "majority" },
+    maxCommitTimeMS: 5000,
+  },
+);
+```
+
+If callback throws, Mongster aborts transaction and rethrows as `TransactionError`.
+
+## Errors
+
+Mongster uses different error type for different error cases. Current error types are:
+- SchemaError
+- ValidationError
+- QueryError
+- ConnectionError
+- TransactionError
+- IndexSyncError
+
+```typescript
+import { MongsterError, ValidationError } from "mongster";
+
+try {
+  await User.createOne({ age: 150 });
 } catch (error) {
-  if (error instanceof MError) {
-    console.error("Validation error:", error.message);
+  if (error instanceof ValidationError) {
+    console.error(error.message);
+  }
+
+  if (error instanceof MongsterError) {
+    console.error(error.code, error.message);
   }
 }
 ```
 
-## Multiple Clients
+> [!NOTE]
+> All the error types/classes are a sub-class of `MongsterError` 
 
-You can create multiple client instances for different databases:
+## Connection Management
+
+For multiple DB connections, use `MongsterClient`.
 
 ```typescript
-import { MongsterClient, model } from "mongster";
+import { MongsterClient } from "mongster";
 
-// Client for main database
-const mainClient = new MongsterClient();
-await mainClient.connect("mongodb://localhost:27017/main");
+const client = new MongsterClient();
 
-// Client for analytics database
-const analyticsClient = new MongsterClient();
-await analyticsClient.connect("mongodb://localhost:27017/analytics");
+await client.connect("mongodb://localhost:27017/mydb", {
+  retryConnection: 3,
+  retryDelayMs: 500,
+  autoIndex: { syncOnConnect: true },
+});
 
-// Models for different clients
-const User = mainClient.model("users", userSchema);
-const Event = analyticsClient.model("events", eventSchema);
+await client.ping();
+await client.disconnect();
 ```
 
-## API Reference
+## API Overview
 
-### Schema Builder Methods
+<details>
+<summary>Exports and model surface</summary>
 
-- `M.string()` - String type
-- `M.number()` - Number type
-- `M.boolean()` - Boolean type
-- `M.date()` - Date type
-- `M.objectId()` - MongoDB ObjectId type
-- `M.binary()` - Binary data type
-- `M.decimal128()` - Decimal128 type
-- `M.object(shape)` - Nested object
-- `M.array(schema)` - Array of items
-- `M.union([...schemas])` - Union type (one of)
-- `M.tuple([...schemas])` - Tuple type (fixed-length array)
+### Top-level exports
 
-### Schema Modifiers
+- `M`
+- `mongster`
+- `model`
+- `MongsterClient`
+- `MongsterError`, `ConnectionError`, `IndexSyncError`, `QueryError`, `SchemaError`, `TransactionError`, `ValidationError`
 
-- `.optional()` - Make field optional
-- `.nullable()` - Allow null values
-- `.default(value)` - Set default value
-- `.defaultFn(fn)` - Set default value from function
-- `.min(n)` - Minimum value/length
-- `.max(n)` - Maximum value/length
-- `.enum([...values])` - Enum values
-- `.match(regex)` - Pattern matching (strings)
-- `.index(direction)` - Create index (1 for ascending, -1 for descending)
-- `.uniqueIndex()` - Create unique index
-- `.sparseIndex()` - Create sparse index
-- `.textIndex()` - Create text index
-- `.hashedIndex()` - Create hashed index
-- `.ttl(seconds)` - Create TTL index (only for Date fields)
+### Schema builder
 
-### Model Methods
+- `M.string()`
+- `M.number()`
+- `M.boolean()`
+- `M.date()`
+- `M.objectId()`
+- `M.decimal()`
+- `M.binary()`
+- `M.object(shape)`
+- `M.array(schema)`
+- `M.union(...schemas)` / `M.oneOf([...schemas])`
+- `M.tuple([...schemas])` / `M.fixedArrayOf(...)`
+- `M.schema(shape)`
 
-**Create**
-- `insertOne(doc, options?)` - Insert one document
-- `insertMany(docs, options?)` - Insert multiple documents
-- `createOne(doc, options?)` - Insert and return document
-- `createMany(docs, options?)` - Insert and return documents
+### Model / transaction-scoped model
 
-**Read**
-- `find(filter, options?)` - Find documents with query builder
-- `findOne(filter, options?)` - Find one document
-- `findById(id, options?)` - Find by ObjectId
-- `countDocuments(filter, options?)` - Count documents
-- `estimatedDocumentCount(options?)` - Estimated count
-- `distinct(field, filter?, options?)` - Get distinct values
-- `aggregate(pipeline, options?)` - Run aggregation pipeline
+- create: `insertOne`, `insertMany`, `createOne`, `createMany`
+- read: `find`, `findOne`, `findById`, `count`, `estimatedCount`, `distinct`
+- update: `updateOne`, `updateMany`, `findOneAndUpdate`, `replaceOne`, `findOneAndReplace`, `upsertOne`
+- delete: `deleteOne`, `deleteMany`, `findOneAndDelete`
+- query extensions: `populate`, `aggregate`, `aggregateRaw`
+- misc: `bulkWrite`, `syncIndexes`, `getCollection`, `getCollectionName`
 
-**Update**
-- `updateOne(filter, update, options?)` - Update one document
-- `updateMany(filter, update, options?)` - Update multiple documents
-- `replaceOne(filter, doc, options?)` - Replace document
-- `findOneAndUpdate(filter, update, options?)` - Find and update
-- `findOneAndReplace(filter, doc, options?)` - Find and replace
+</details>
 
-**Delete**
-- `deleteOne(filter, options?)` - Delete one document
-- `deleteMany(filter, options?)` - Delete multiple documents
-- `findOneAndDelete(filter, options?)` - Find and delete
 
-**Index Management**
-- `syncIndexes(options?)` - Synchronize indexes with schema
-- `getCollection()` - Get underlying MongoDB collection
+## Limitations and Roadmap
 
-### Client Methods
-
-**Connection**
-- `connect(uri?, options?)` - Connect to MongoDB
-- `disconnect()` - Disconnect from MongoDB
-- `ping()` - Check connection status
-
-**Transactions**
-- `transaction(callback, options?)` - Execute a transaction with automatic commit/rollback
-- `startSession(options?)` - Start a manual MongoDB session
-
-**Models**
-- `model(name, schema)` - Create a model instance
+- Populate currently supports top-level fields declared as `M.objectId().ref(() => Model)` only.
+- Array refs are not populatable yet.
+- `.ref()` is terminal for now. Do not chain `optional()`, `nullable()`, `default()`, or `defaultFn()` after it.
+- Nested populate paths are not supported. Nested selection inside populated docs is supported.
+- `findOne()` and `findById()` are query builders now. `await` still works, but they are not plain `Promise` values.
+- Aggregation `.lookup()` currently accepts model instances only, not raw collection-name strings.
+- Aggregation `.lookup()` always returns arrays. Use `.unwind()` when you need a single joined document shape.
+- Aggregation type inference is strongest for field paths, literals, arrays, and nested object composition.
+- Mongo expression operators inside `project()` / `addFields()` such as `$toUpper`, `$add`, `$cond`, and similar operators are not inferred yet. Use `raw<YourType>()` or an explicit generic escape hatch.
+- Aggregation hooks do not exist yet.
+- Transactions require replica set or sharded cluster support.
+- A better documentation is being worked on.
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-- 🐛 [Report bugs](https://github.com/IshmamR/mongster/issues)
-- 💡 [Request features](https://github.com/IshmamR/mongster/issues)
+See [CONTRIBUTING.md](CONTRIBUTING.md). Release process and maintainer workflow live there.
 
 ## License
 
-MIT - see [LICENSE](LICENSE) for details
-
-## Links
-
-- **GitHub**: [IshmamR/mongster](https://github.com/IshmamR/mongster)
-- **npm**: [mongster](https://www.npmjs.com/package/mongster)
-- **Issues**: [Report a bug](https://github.com/IshmamR/mongster/issues)
-- **Author**: [IshmamR](https://github.com/IshmamR)
+MIT. See [LICENSE](LICENSE).

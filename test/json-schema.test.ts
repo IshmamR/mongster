@@ -20,9 +20,6 @@ const M = new MongsterSchemaBuilder();
  * - Edge cases (empty schema, single field, deep nesting)
  * - Special patterns (regex, combined constraints)
  * - MongoDB-specific features (timestamps, additionalProperties)
- *
- * Total: 51 tests
- * Status: All tests currently fail (method returns empty object)
  */
 
 describe("JSON Schema Conversion", () => {

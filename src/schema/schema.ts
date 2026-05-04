@@ -1,8 +1,10 @@
-import type { IndexDescription } from "mongodb";
-import { MError, ValidationError } from "../error";
+import type { Document, IndexDescription } from "mongodb";
+import { SchemaError, ValidationError } from "../error";
 import { updateKeysArray } from "../helpers/constants";
 import { processOperators, unwrapSchema, validateUpdateRecord } from "../helpers/schema";
+import { HookRegistry } from "../hooks";
 import type { MongsterUpdateFilter } from "../types/types.filter";
+import type { HookName, PostHookFn, PreHookFn } from "../types/types.hooks";
 import type { AllFilterKeys } from "../types/types.query";
 import type {
   MongsterIndexDirection,
@@ -11,7 +13,9 @@ import type {
   ObjectInput,
   ObjectOutput,
   Resolve,
+  TimestampConfig,
   WithTimestamps,
+  WithTimestampsInput,
 } from "../types/types.schema";
 import {
   ArraySchema,
@@ -40,19 +44,41 @@ export class MongsterSchema<
 
   #shape: T;
   #collectedIndexes: IndexDescription[] | null;
+  #hooks: HookRegistry;
 
   constructor(shape: T) {
     for (const [_, rawSchema] of Object.entries(shape)) {
-      if (rawSchema instanceof MongsterSchema) throw new Error("MongsterSchema cannot be embedded");
+      if (rawSchema instanceof MongsterSchema) {
+        throw new SchemaError("MongsterSchema cannot be embedded");
+      }
     }
 
     super();
     this.#shape = shape;
     this.#collectedIndexes = null;
+    this.#hooks = new HookRegistry();
   }
 
   getShape(): T {
     return this.#shape;
+  }
+
+  #getTimestampKeys(): { createdAt?: string; updatedAt?: string } {
+    const tsOptions = this.options.withTimestamps;
+    if (!tsOptions) return {};
+    if (tsOptions === true) return { createdAt: "createdAt", updatedAt: "updatedAt" };
+
+    const entries = (["createdAt", "updatedAt"] as const).map((k) => {
+      const val = tsOptions[k];
+      const v =
+        Object.hasOwn(tsOptions, k) && val === false
+          ? undefined
+          : typeof val === "string"
+            ? val
+            : k;
+      return [k, v] as const;
+    });
+    return Object.fromEntries(entries);
   }
 
   addIndex<K extends AllFilterKeys<$T>>(
@@ -64,42 +90,63 @@ export class MongsterSchema<
     return clone;
   }
 
-  withTimestamps(): MongsterSchema<T, WithTimestamps<$T>> {
+  withTimestamps<const C extends TimestampConfig>(
+    config?: C,
+  ): MongsterSchema<T, WithTimestamps<$T, C>, WithTimestampsInput<$I, C>> {
     const clone = this.clone();
-    clone.options = { ...this.options, withTimestamps: true };
-    return clone as MongsterSchema<T, WithTimestamps<$T>>;
+    clone.options = {
+      ...this.options,
+      withTimestamps: typeof config === "undefined" ? true : config,
+    };
+    return clone as unknown as MongsterSchema<T, WithTimestamps<$T, C>, WithTimestampsInput<$I, C>>;
   }
 
   clone(): this {
     const clone = new MongsterSchema(this.#shape) as this;
     clone.rootIndexes = [...this.rootIndexes];
     clone.options = { ...this.options };
+    clone.#hooks = this.#hooks.clone();
     return clone;
   }
 
+  pre<Op extends HookName>(op: Op, fn: PreHookFn<Op, $I, $T & Document>): this {
+    this.#hooks.addPre(op, fn);
+    return this;
+  }
+
+  post<Op extends HookName>(op: Op, fn: PostHookFn<Op, $I, $T & Document>): this {
+    this.#hooks.addPost(op, fn);
+    return this;
+  }
+
+  getHooks(): HookRegistry {
+    return this.#hooks;
+  }
+
   parse(v: unknown): $T {
-    if (typeof v !== "object" || v === null) throw new MError("Expected an object");
-    if (Array.isArray(v)) throw new MError("Expected an object, but received an array");
+    if (typeof v !== "object" || v === null) throw new SchemaError("Expected an object");
+    if (Array.isArray(v)) throw new SchemaError("Expected an object, but received an array");
 
     const out: Record<string, unknown> = {};
 
-    if ("_id" in (v as any)) {
-      out._id = (v as any)._id;
+    if ("_id" in v) {
+      out._id = v._id;
     }
 
     for (const [k, s] of Object.entries(this.#shape)) {
       try {
         out[k] = s.parse((v as any)[k]);
       } catch (err) {
-        throw new MError(`${k}: ${(err as MError).message}`, {
+        throw new SchemaError(`${k}: ${(err as SchemaError).message}`, {
           cause: err,
         });
       }
     }
 
     if (this.options.withTimestamps) {
-      out.createdAt = new Date();
-      out.updatedAt = new Date();
+      const timestampKeys = this.#getTimestampKeys();
+      if (timestampKeys.createdAt) out[timestampKeys.createdAt] = new Date();
+      if (timestampKeys.updatedAt) out[timestampKeys.updatedAt] = new Date();
     }
 
     return out as $T;
@@ -107,9 +154,9 @@ export class MongsterSchema<
 
   // Override base parseForUpdate with specialized signature for update operations
   parseForUpdate(updateObj: MongsterUpdateFilter<$T>, isUpsert?: boolean): MongsterUpdateFilter<$T>;
-  parseForUpdate(v: unknown): $T | undefined;
+  parseForUpdate(updateObj: unknown): $T | undefined;
   parseForUpdate(updateObj: unknown, isUpsert?: boolean): any {
-    // If called with update filter object
+    // when called with update filter object
     if (typeof updateObj === "object" && updateObj !== null && !Array.isArray(updateObj)) {
       const hasUpdateOperator = Object.keys(updateObj).some((k) => k.startsWith("$"));
       if (hasUpdateOperator) {
@@ -117,24 +164,24 @@ export class MongsterSchema<
       }
     }
 
-    // Otherwise, treat as regular parse for update (partial validation)
+    // otherwise, treat as regular parse for update (partial validation)
     if (updateObj === undefined) return undefined;
 
-    if (typeof updateObj !== "object" || updateObj === null) throw new MError("Expected an object");
-    if (Array.isArray(updateObj)) throw new MError("Expected an object, but received an array");
+    if (typeof updateObj !== "object" || updateObj === null) {
+      throw new SchemaError("Expected an object, received null");
+    }
+    if (Array.isArray(updateObj)) {
+      throw new SchemaError("Expected an object, received an array");
+    }
 
     const out: Record<string, unknown> = {};
     for (const [k, s] of Object.entries(this.#shape)) {
       try {
         const parsed = s.parseForUpdate((updateObj as any)[k]);
-        // Only include defined values
-        if (parsed !== undefined) {
-          out[k] = parsed;
-        }
+        // we only include defined values
+        if (parsed !== undefined) out[k] = parsed;
       } catch (err) {
-        throw new MError(`${k}: ${(err as MError).message}`, {
-          cause: err,
-        });
+        throw new SchemaError(`${k}: ${(err as SchemaError).message}`, { cause: err });
       }
     }
 
@@ -158,12 +205,17 @@ export class MongsterSchema<
     );
 
     if (this.options.withTimestamps) {
-      const autoTimestampData: any = { updatedAt: true };
-      if (isUpsert) autoTimestampData.createdAt = true;
-      processedUpdateRecord.$currentDate = {
-        ...(processedUpdateRecord.$currentDate ?? {}),
-        ...autoTimestampData,
-      };
+      const timestampKeys = this.#getTimestampKeys();
+      const autoTimestampData: Record<string, true> = {};
+      if (timestampKeys.updatedAt) autoTimestampData[timestampKeys.updatedAt] = true;
+      if (isUpsert && timestampKeys.createdAt) autoTimestampData[timestampKeys.createdAt] = true;
+
+      if (Object.keys(autoTimestampData).length) {
+        (processedUpdateRecord as any).$currentDate = {
+          ...(processedUpdateRecord.$currentDate ?? {}),
+          ...autoTimestampData,
+        };
+      }
     }
 
     return validatedUpdateRecord;
@@ -223,34 +275,34 @@ export class MongsterSchema<
       if (unwrapped instanceof NumberSchema) {
         const property: Record<string, any> = { type: "number" };
         const checks = unwrapped.getChecks();
-        if (typeof checks.min !== "undefined") property.minimum = checks.min;
-        if (typeof checks.max !== "undefined") property.maximum = checks.max;
-        if (typeof checks.enum !== "undefined") property.enum = checks.enum;
-        if (typeof checks.default !== "undefined") property.default = checks.default;
+        if (checks.min !== undefined) property.minimum = checks.min;
+        if (checks.max !== undefined) property.maximum = checks.max;
+        if (checks.enum !== undefined) property.enum = checks.enum;
+        if (checks.default !== undefined) property.default = checks.default;
         return property;
       }
 
       if (unwrapped instanceof StringSchema) {
         const property: Record<string, any> = { type: "string" };
         const checks = unwrapped.getChecks();
-        if (typeof checks.min !== "undefined") property.minLength = checks.min;
-        if (typeof checks.max !== "undefined") property.maxLength = checks.max;
-        if (typeof checks.enum !== "undefined") property.enum = checks.enum;
-        if (typeof checks.match !== "undefined") property.pattern = checks.match.source;
-        if (typeof checks.default !== "undefined") property.default = checks.default;
+        if (checks.min !== undefined) property.minLength = checks.min;
+        if (checks.max !== undefined) property.maxLength = checks.max;
+        if (checks.enum !== undefined) property.enum = checks.enum;
+        if (checks.match !== undefined) property.pattern = checks.match.source;
+        if (checks.default !== undefined) property.default = checks.default;
         return property;
       }
 
       if (unwrapped instanceof BooleanSchema) {
         const property: Record<string, any> = { type: "boolean" };
         const checks = unwrapped.getChecks();
-        if (typeof checks.default !== "undefined") property.default = checks.default;
+        if (checks.default !== undefined) property.default = checks.default;
         return property;
       }
       if (unwrapped instanceof DateSchema) {
         const property: Record<string, any> = { type: "string", format: "date-time" };
         const checks = unwrapped.getChecks();
-        if (typeof checks.default !== "undefined") property.default = checks.default.toISOString();
+        if (checks.default !== undefined) property.default = checks.default.toISOString();
         return property;
       }
 
@@ -258,14 +310,14 @@ export class MongsterSchema<
         const objectIdRegex = /^[a-f0-9]{24}$/;
         const property: Record<string, any> = { type: "string", pattern: objectIdRegex.source };
         const checks = unwrapped.getChecks();
-        if (typeof checks.default !== "undefined") property.default = checks.default.toString();
+        if (checks.default !== undefined) property.default = checks.default.toString();
         return property;
       }
       if (unwrapped instanceof Decimal128Schema) {
         const decimalRegex = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/;
         const property: Record<string, any> = { type: "string", pattern: decimalRegex.source };
         const checks = unwrapped.getChecks();
-        if (typeof checks.default !== "undefined") property.default = checks.default.toString();
+        if (checks.default !== undefined) property.default = checks.default.toString();
         return property;
       }
       if (unwrapped instanceof BinarySchema) {
@@ -276,16 +328,16 @@ export class MongsterSchema<
         const inner = unwrapped.getShapes();
         const property: Record<string, any> = { type: "array", items: makeJsonSchema(inner) };
         const checks = unwrapped.getChecks();
-        if (typeof checks.min !== "undefined") property.minItems = checks.min;
-        if (typeof checks.max !== "undefined") property.maxItems = checks.max;
-        if (typeof checks.default !== "undefined") property.default = checks.default;
+        if (checks.min !== undefined) property.minItems = checks.min;
+        if (checks.max !== undefined) property.maxItems = checks.max;
+        if (checks.default !== undefined) property.default = checks.default;
         return property;
       }
 
       if (unwrapped instanceof ObjectSchema) {
         const property = walk(unwrapped.getShape());
         const checks = unwrapped.getChecks();
-        if (typeof checks.default !== "undefined") property.default = checks.default;
+        if (checks.default !== undefined) property.default = checks.default;
         return property;
       }
 
@@ -298,7 +350,7 @@ export class MongsterSchema<
         property.minItems = innerShapes.length;
         property.maxItems = innerShapes.length;
         const checks = unwrapped.getChecks();
-        if (typeof checks.default !== "undefined") property.default = checks.default;
+        if (checks.default !== undefined) property.default = checks.default;
         return property;
       }
 
@@ -309,7 +361,7 @@ export class MongsterSchema<
           property.anyOf.push(makeJsonSchema(innerShape));
         }
         const checks = unwrapped.getChecks();
-        if (typeof checks.default !== "undefined") property.default = checks.default;
+        if (checks.default !== undefined) property.default = checks.default;
         return property;
       }
 

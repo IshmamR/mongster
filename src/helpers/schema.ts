@@ -1,4 +1,5 @@
-import { MError, ValidationError } from "../error";
+import { ObjectId } from "mongodb";
+import { SchemaError, ValidationError } from "../error";
 import {
   ArraySchema,
   type MongsterSchemaBase,
@@ -27,7 +28,7 @@ export function processOperators<$T>(
     validator?: (val: any, key: string) => void,
   ) {
     const operatorValue = updateObj[operator];
-    if (typeof operatorValue === "undefined") return;
+    if (operatorValue === undefined) return;
     if (typeof operatorValue !== "object") {
       throw new ValidationError(`${operator} must be an object`);
     }
@@ -38,11 +39,11 @@ export function processOperators<$T>(
     if (keys.length) {
       for (const key of keys) {
         const val = (operatorValue as any)[key];
-        if (typeof val === "undefined") continue;
+        if (val === undefined) continue;
 
         if (validator) validator(val, key);
 
-        if (typeof result !== "undefined") result[key] = val;
+        if (result !== undefined) result[key] = val;
         else result = { [key]: val };
       }
     }
@@ -228,12 +229,12 @@ export function validateUpdateRecord<$T>(
   schemaOptions?: MongsterSchemaOptions,
 ) {
   // $set
-  if (typeof processedRecord.$set !== "undefined") {
+  if (processedRecord.$set !== undefined) {
     Object.entries(processedRecord.$set).forEach(([path, value]) => {
       const resolved = resolveSchemaAtPath(path, shape);
       if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
 
-      if (typeof value === "undefined") {
+      if (value === undefined) {
         throw new ValidationError(`Cannot set "${path}" to undefined, use $unset instead`);
       } else if (value === null) {
         if (!resolved.isNullable) throw new ValidationError(`Field "${path}" is not nullable`);
@@ -241,19 +242,29 @@ export function validateUpdateRecord<$T>(
         try {
           resolved.schema.parseForUpdate(value);
         } catch (err) {
-          throw new ValidationError(`$set.${path}: ${(err as MError).message}`);
+          throw new ValidationError(`$set.${path}: ${(err as SchemaError).message}`);
         }
       }
     });
   }
 
   // $setOnInsert
-  if (typeof processedRecord.$setOnInsert !== "undefined") {
+  if (processedRecord.$setOnInsert !== undefined) {
     Object.entries(processedRecord.$setOnInsert).forEach(([path, value]) => {
+      if (path === "_id") {
+        if (value === undefined) {
+          throw new ValidationError(`Cannot set "${path}" to undefined in $setOnInsert`);
+        }
+        if (!(value instanceof ObjectId)) {
+          throw new ValidationError("$setOnInsert._id must be an ObjectId");
+        }
+        return;
+      }
+
       const resolved = resolveSchemaAtPath(path, shape);
       if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
 
-      if (typeof value === "undefined") {
+      if (value === undefined) {
         throw new ValidationError(`Cannot set "${path}" to undefined in $setOnInsert`);
       } else if (value === null) {
         if (!resolved.isNullable) throw new ValidationError(`Field "${path}" is not nullable`);
@@ -261,7 +272,7 @@ export function validateUpdateRecord<$T>(
         try {
           resolved.schema.parseForUpdate(value);
         } catch (err) {
-          if (err instanceof MError) {
+          if (err instanceof SchemaError) {
             throw new ValidationError(`$setOnInsert.${path}: ${err.message}`);
           }
           throw new ValidationError(`$setOnInsert.${path}: Something did not add up`);
@@ -271,7 +282,7 @@ export function validateUpdateRecord<$T>(
   }
 
   // $unset
-  if (typeof processedRecord.$unset !== "undefined") {
+  if (processedRecord.$unset !== undefined) {
     Object.entries(processedRecord.$unset).forEach(([path, _value]) => {
       const resolved = resolveSchemaAtPath(path, shape);
       if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
@@ -280,7 +291,7 @@ export function validateUpdateRecord<$T>(
   }
 
   // $inc
-  if (typeof processedRecord.$inc !== "undefined") {
+  if (processedRecord.$inc !== undefined) {
     Object.entries(processedRecord.$inc).forEach(([path, value]) => {
       const resolved = resolveSchemaAtPath(path, shape);
       if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
@@ -299,7 +310,7 @@ export function validateUpdateRecord<$T>(
   }
 
   // $mul
-  if (typeof processedRecord.$mul !== "undefined") {
+  if (processedRecord.$mul !== undefined) {
     Object.entries(processedRecord.$mul).forEach(([path, value]) => {
       const resolved = resolveSchemaAtPath(path, shape);
       if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
@@ -318,7 +329,7 @@ export function validateUpdateRecord<$T>(
   }
 
   // $min
-  if (typeof processedRecord.$min !== "undefined") {
+  if (processedRecord.$min !== undefined) {
     Object.entries(processedRecord.$min).forEach(([path, value]) => {
       const resolved = resolveSchemaAtPath(path, shape);
       if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
@@ -326,14 +337,14 @@ export function validateUpdateRecord<$T>(
       try {
         resolved.schema.parseForUpdate(value);
       } catch (err) {
-        if (err instanceof MError) throw new ValidationError(`$min.${path}: ${err.message}`);
+        if (err instanceof SchemaError) throw new ValidationError(`$min.${path}: ${err.message}`);
         throw new ValidationError(`$min.${path}: Something did not add up`);
       }
     });
   }
 
   // $max
-  if (typeof processedRecord.$max !== "undefined") {
+  if (processedRecord.$max !== undefined) {
     Object.entries(processedRecord.$max).forEach(([path, value]) => {
       const resolved = resolveSchemaAtPath(path, shape);
       if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
@@ -341,14 +352,14 @@ export function validateUpdateRecord<$T>(
       try {
         resolved.schema.parseForUpdate(value);
       } catch (err) {
-        if (err instanceof MError) throw new ValidationError(`$max.${path}: ${err.message}`);
+        if (err instanceof SchemaError) throw new ValidationError(`$max.${path}: ${err.message}`);
         throw new ValidationError(`$max.${path}: Something did not add up`);
       }
     });
   }
 
   // $currentDate
-  if (typeof processedRecord.$currentDate !== "undefined") {
+  if (processedRecord.$currentDate !== undefined) {
     Object.entries(processedRecord.$currentDate).forEach(([path, _value]) => {
       if (schemaOptions?.withTimestamps && (path === "updatedAt" || path === "createdAt")) {
         // auto updated fields are skipped
@@ -368,7 +379,7 @@ export function validateUpdateRecord<$T>(
   }
 
   // $addToSet
-  if (typeof processedRecord.$addToSet !== "undefined") {
+  if (processedRecord.$addToSet !== undefined) {
     Object.entries(processedRecord.$addToSet).forEach(([path, value]) => {
       const resolved = resolveSchemaAtPath(path, shape);
       if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
@@ -392,7 +403,7 @@ export function validateUpdateRecord<$T>(
             elementSchema.parseForUpdate(item);
           } catch (err) {
             const errPath = `$addToSet.${path}.$each[${idx}]`;
-            if (err instanceof MError) throw new ValidationError(`${errPath}: ${err.message}`);
+            if (err instanceof SchemaError) throw new ValidationError(`${errPath}: ${err.message}`);
             throw new ValidationError(`${errPath}: Something did not add up`);
           }
         });
@@ -401,7 +412,7 @@ export function validateUpdateRecord<$T>(
           elementSchema.parseForUpdate(value);
         } catch (err) {
           const errPath = `$addToSet.${path}`;
-          if (err instanceof MError) throw new ValidationError(`${errPath}: ${err.message}`);
+          if (err instanceof SchemaError) throw new ValidationError(`${errPath}: ${err.message}`);
           throw new ValidationError(`${errPath}: Something did not add up`);
         }
       }
@@ -409,7 +420,7 @@ export function validateUpdateRecord<$T>(
   }
 
   // $push
-  if (typeof processedRecord.$push !== "undefined") {
+  if (processedRecord.$push !== undefined) {
     Object.entries(processedRecord.$push).forEach(([path, value]) => {
       const resolved = resolveSchemaAtPath(path, shape);
       if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
@@ -433,7 +444,7 @@ export function validateUpdateRecord<$T>(
             elementSchema.parseForUpdate(item);
           } catch (err) {
             const errPath = `$push.${path}.$each[${idx}]`;
-            if (err instanceof MError) throw new ValidationError(`${errPath}: ${err.message}`);
+            if (err instanceof SchemaError) throw new ValidationError(`${errPath}: ${err.message}`);
             throw new ValidationError(`${errPath}: Something did not add up`);
           }
         });
@@ -442,7 +453,7 @@ export function validateUpdateRecord<$T>(
           elementSchema.parseForUpdate(value);
         } catch (err) {
           const errPath = `$push.${path}`;
-          if (err instanceof MError) throw new ValidationError(`${errPath}: ${err.message}`);
+          if (err instanceof SchemaError) throw new ValidationError(`${errPath}: ${err.message}`);
           throw new ValidationError(`${errPath}: Something did not add up`);
         }
       }
@@ -450,7 +461,7 @@ export function validateUpdateRecord<$T>(
   }
 
   // $pull
-  if (typeof processedRecord.$pull !== "undefined") {
+  if (processedRecord.$pull !== undefined) {
     Object.entries(processedRecord.$pull).forEach(([path, value]) => {
       const resolved = resolveSchemaAtPath(path, shape);
       if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
@@ -469,7 +480,7 @@ export function validateUpdateRecord<$T>(
           elementSchema.parseForUpdate(value);
         } catch (err) {
           const errPath = `$pull.${path}`;
-          if (err instanceof MError) throw new ValidationError(`${errPath}: ${err.message}`);
+          if (err instanceof SchemaError) throw new ValidationError(`${errPath}: ${err.message}`);
           throw new ValidationError(`${errPath}: Something did not add up`);
         }
       }
@@ -477,7 +488,7 @@ export function validateUpdateRecord<$T>(
   }
 
   // $pullAll
-  if (typeof processedRecord.$pullAll !== "undefined") {
+  if (processedRecord.$pullAll !== undefined) {
     Object.entries(processedRecord.$pullAll).forEach(([path, values]) => {
       const resolved = resolveSchemaAtPath(path, shape);
       if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
@@ -500,7 +511,7 @@ export function validateUpdateRecord<$T>(
           elementSchema.parseForUpdate(item);
         } catch (err) {
           const errPath = `$pullAll.${path}[${idx}]`;
-          if (err instanceof MError) throw new ValidationError(`${errPath}: ${err.message}`);
+          if (err instanceof SchemaError) throw new ValidationError(`${errPath}: ${err.message}`);
           throw new ValidationError(`${errPath}: Something did not add up`);
         }
       });
@@ -508,7 +519,7 @@ export function validateUpdateRecord<$T>(
   }
 
   // $pop
-  if (typeof processedRecord.$pop !== "undefined") {
+  if (processedRecord.$pop !== undefined) {
     Object.entries(processedRecord.$pop).forEach(([path, _value]) => {
       const resolved = resolveSchemaAtPath(path, shape);
       if (!resolved) throw new ValidationError(`Field "${path}" does not exist in schema`);
@@ -523,7 +534,7 @@ export function validateUpdateRecord<$T>(
   }
 
   // $rename
-  if (typeof processedRecord.$rename !== "undefined") {
+  if (processedRecord.$rename !== undefined) {
     Object.entries(processedRecord.$rename).forEach(([sourcePath, targetPath]) => {
       if (typeof targetPath !== "string") {
         throw new ValidationError(`$rename.${sourcePath} must be a string`);
