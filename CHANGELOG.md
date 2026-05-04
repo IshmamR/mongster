@@ -5,25 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-05-02
 
 ### Added
-- query hooks for read/write/bulk operations
-- `bulkWrite()` on models and transaction-scoped models
 - populate support for `find()`, `findOne()`, and `findById()` via `M.objectId().ref(() => Model)`
-- type-safe aggregation builder via `model.aggregate()` and transaction-scoped `aggregate()`
-- typed stages for `match`, `group`, `sort`, `limit`, `skip`, `project`, `unwind`, `lookup`, `addFields`, `count`, `raw`, and `explain`
-- aggregation tests covering grouping, lookup, unwind, complex pipelines, and transactions
+- schema hooks for read, write, delete, and bulkWrite operations
+- type-safe aggregation builder with typed `match`, `group`, `sort`, `limit`, `skip`, `project`, `unwind`, `lookup`, `addFields`, `count`, `raw`, and `explain` stages
+- `findById()`, configurable timestamps, and expanded schema validation test coverage
 
 ### Changed
-- `findOne()` and `findById()` now return thenable query builders to support `.populate()` before execution
-- docs updated to reflect current API surface and known caveats
+- simplified `FindOneQuery` and `FindQuery` return types
+- improved update validation and `$setOnInsert` handling
+- consolidated package documentation into `README.md` with transactions included inline
+- moved maintainer release flow into `CONTRIBUTING.md` and kept manual release process as project default
 
-### Caveats
-- populate currently supports only top-level ref fields declared as `M.objectId().ref(() => Model)`
-- array refs are not populatable yet
-- `.ref()` is terminal for now; chaining `optional()`, `nullable()`, or default modifiers after `.ref()` is not supported
-- aggregation type inference is strongest for field-path, literal, and nested-object expressions; advanced Mongo expression operators still need `raw()` or an explicit generic escape hatch
+## [0.2.0] - 2025-12-25
+
+### Added
+- transaction API via `mongster.transaction(async (ctx) => { ... })`
+- `startSession()` support for manual MongoDB session control
+
+### Changed
+- release automation and tagging flow updated around the 0.2.0 release line
+
+## [0.1.1] - 2025-12-16
+
+### Changed
+- npm publishing workflow cleanup for the 0.1.x release line
+
+## [0.1.0] - 2025-12-16
+
+### Added
+- initial 0.1.x package line
+- Release Please setup for automated publishing experiments
+
+### Changed
+- package version moved from 0.0.x to 0.1.0
 
 ## [0.0.14] - 2025-12-05
 

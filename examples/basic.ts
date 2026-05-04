@@ -6,7 +6,7 @@ const userSchema = M.schema({
   age: M.number(),
   dob: M.date().optional(),
   gender: M.boolean(),
-  role: M.string().enum(["admin", "janitor"] as const),
+  role: M.string().enum(["admin", "janitor"]),
   socials: M.array(
     M.object({
       host: M.string(),
