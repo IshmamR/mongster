@@ -218,83 +218,17 @@ All submissions require review. We use GitHub pull requests for this purpose.
 Reviewers will check for:
 - ✅ Code quality and style
 - ✅ Test coverage
-
-## Maintainer Release Flow
-
-This project uses manual npm releases with an interactive helper script.
-
-### Prerequisites
-
-- Clean git working tree
-- npm account with publish permission for `mongster`
-- npm auth configured locally via `npm login`
-- Push access to repository
-
-### Recommended flow
-
-From repo root:
-
-```bash
-bun run release
-```
-
-The release script will:
-
-1. Read current version from `package.json`
-2. Compare against npm published versions
-3. Let you choose one of:
-   - release current version
-   - bump version (patch/minor/major/pre*)
-   - custom version
-4. Commit version bump if version changes
-5. Run `bun run prepublishOnly`
-6. Publish to npm
-   - stable versions use `latest`
-   - pre-release versions use `next`
-7. Create git tag `v<version>`
-8. Optionally push tag to `origin`
-
-### Manual flow
-
-```bash
-# 1) choose version
-npm version <x.y.z> --no-git-tag-version
-
-# 2) commit version bump
-git add package.json
-git commit -m "chore: bump version to <x.y.z>"
-
-# 3) run release checks
-bun run prepublishOnly
-
-# 4) publish
-npm publish --access public
-# prerelease example:
-# npm publish --access public --tag next
-
-# 5) tag + push
-git tag -a v<x.y.z> -m "Release v<x.y.z>"
-git push origin main
-git push origin v<x.y.z>
-```
-
-### Release checklist
-
-- README.md reflects current public API and limitations
-- CHANGELOG.md is updated
-- `bun run lint` passes
-- `bun run typecheck` passes
-- `bun run test` passes
-- `bun run build` passes
-- npm publish succeeds before pushing new tag
-
-### Notes
-
-- If local or remote tag already exists, release script will ask before replacing or deleting it.
-- If publish fails, do not push new tag.
 - ✅ Documentation completeness
 - ✅ Breaking changes
 - ✅ Performance implications
+
+### Notes
+
+- If local or remote tag already exists, the release script will ask before replacing or deleting it.
+- The workflow fails fast if the tag version does not match `package.json` or does not match semver.
+- GitHub Actions are pinned to commit SHAs and Bun to `1.3.14`. `bun install` runs with `--ignore-scripts`; lifecycle scripts of transitive deps are disabled.
+- Workflow `dry_run` input defaults to `true` for manual dispatch, so a manual run is always a dry run unless you explicitly set `dry_run=false`.
+- The `release: published` trigger accepts a release whose tag was force-rewritten between push and release. Pin tag + push to the same commit (`git tag` then `git push origin <tag>` immediately, before any release creation).
 
 ## Community
 

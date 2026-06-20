@@ -54,7 +54,7 @@ export class MongsterClient {
   model<CN extends string, SC extends MongsterSchema<any, any, any>>(
     collectionName: CN,
     schema: SC,
-  ) {
+  ): MongsterModel<CN, SC> {
     this.#schemas.set(collectionName, schema);
     const model = new MongsterModel(this, collectionName, schema);
     this.#models.set(collectionName, model);

@@ -17,8 +17,11 @@ import type {
   WithoutId,
 } from "mongodb";
 import type { MongsterClient } from "./client";
-import type { MongsterModel } from "./collection";
+import type { MongsterModel, SchemaShape } from "./collection";
 import { TransactionError } from "./error";
+import type { AggregateQuery } from "./queries/AggregateQuery";
+import type { FindOneQuery } from "./queries/FindOneQuery";
+import type { FindQuery } from "./queries/FindQuery";
 import type { MongsterSchema } from "./schema/schema";
 import type { MongsterFilter, MongsterUpdateFilter } from "./types/types.filter";
 import type { AllFilterKeys } from "./types/types.query";
@@ -155,15 +158,24 @@ export class TransactionModel<
     return this.#baseModel.findOneAndDelete(filter, this.#injectSession(options));
   }
 
-  find(filter?: MongsterFilter<OT>, options?: FindTransactionOptions) {
+  find(
+    filter?: MongsterFilter<OT>,
+    options?: FindTransactionOptions,
+  ): FindQuery<T, OT, SchemaShape<SC>> {
     return this.#baseModel.find(filter, this.#injectSession(options));
   }
 
-  findOne(filter: MongsterFilter<OT>, options?: FindOneTransactionOptions) {
+  findOne(
+    filter: MongsterFilter<OT>,
+    options?: FindOneTransactionOptions,
+  ): FindOneQuery<T, OT, SchemaShape<SC>> {
     return this.#baseModel.findOne(filter, this.#injectSession(options));
   }
 
-  findById(id: WithId<OT>["_id"], options?: FindByIdTransactionOptions) {
+  findById(
+    id: WithId<OT>["_id"],
+    options?: FindByIdTransactionOptions,
+  ): FindOneQuery<T, OT, SchemaShape<SC>> {
     return this.#baseModel.findById(id, this.#injectSession(options));
   }
 
@@ -179,7 +191,7 @@ export class TransactionModel<
     return this.#baseModel.distinct(key, filter, this.#injectSession(options));
   }
 
-  aggregate(options?: AggregateTransactionOptions) {
+  aggregate(options?: AggregateTransactionOptions): AggregateQuery<OT, OT> {
     return this.#baseModel.aggregate(this.#injectSession(options));
   }
 
