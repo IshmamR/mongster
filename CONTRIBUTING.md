@@ -226,7 +226,7 @@ Reviewers will check for:
 
 - If local or remote tag already exists, the release script will ask before replacing or deleting it.
 - The workflow fails fast if the tag version does not match `package.json` or does not match semver.
-- GitHub Actions are pinned to commit SHAs and Bun to `1.3.3`. `bun install` runs with `--ignore-scripts`; lifecycle scripts of transitive deps are disabled.
+- GitHub Actions are pinned to commit SHAs and Bun to `1.3.14`. `bun install` runs with `--ignore-scripts`; lifecycle scripts of transitive deps are disabled.
 - Workflow `dry_run` input defaults to `true` for manual dispatch, so a manual run is always a dry run unless you explicitly set `dry_run=false`.
 - The `release: published` trigger accepts a release whose tag was force-rewritten between push and release. Pin tag + push to the same commit (`git tag` then `git push origin <tag>` immediately, before any release creation).
 
