@@ -1,6 +1,7 @@
 import { MongsterClient } from "./client";
+import type { MongsterModel } from "./collection";
 import { MongsterSchemaBuilder } from "./schema";
-import type { MongsterSchemaBase } from "./schema/base";
+import type { MongsterSchemaBase, MongsterSchemaInternal } from "./schema/base";
 import type { MongsterSchema } from "./schema/schema";
 import type { InferSchemaInputType, InferSchemaType } from "./types/types.schema";
 
@@ -16,7 +17,11 @@ export {
 } from "./error";
 
 export const M = new MongsterSchemaBuilder();
-export const defineSchema = M.schema;
+export function defineSchema<T extends Record<string, MongsterSchemaInternal<any>>>(
+  shape: T,
+): MongsterSchema<T> {
+  return M.schema(shape);
+}
 
 export namespace M {
   export type infer<MS extends MongsterSchemaBase<any>> = InferSchemaType<MS>;
@@ -31,6 +36,6 @@ export { MongsterClient };
 export function model<CN extends string, SC extends MongsterSchema<any, any, any>>(
   name: CN,
   schema: SC,
-) {
+): MongsterModel<CN, SC> {
   return mongster.model<CN, SC>(name, schema);
 }

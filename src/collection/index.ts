@@ -146,7 +146,8 @@ export interface SyncIndexProp {
   autoDrop?: boolean;
 }
 
-type SchemaShape<SC extends MongsterSchema<any, any, any>> =
+/** extract shape of the schema inside MongsterSchema */
+export type SchemaShape<SC extends MongsterSchema<any, any, any>> =
   SC extends MongsterSchema<infer Shape, any, any> ? Shape : never;
 
 export class MongsterModel<
