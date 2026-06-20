@@ -1,6 +1,6 @@
 {
   "name": "mongster",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -54,10 +54,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ishmamR/mongster.git"
+    "url": "https://github.com/IshmamR/mongster.git"
   },
   "bugs": {
-    "url": "https://github.com/ishmamR/mongster/issues"
+    "url": "https://github.com/IshmamR/mongster/issues"
   },
   "homepage": "https://mongster.ishmam.dev",
   "license": "MIT"
