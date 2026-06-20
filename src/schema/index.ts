@@ -21,20 +21,20 @@ export class MongsterSchemaBuilder {
    * Fixed-position array (tuple).
    * @params items
    */
-  tuple<T extends MongsterSchemaInternal<any>[]>(items: [...T]) {
+  tuple<T extends MongsterSchemaInternal<any>[]>(items: [...T]): TupleSchema<[...T]> {
     return new TupleSchema(items);
   }
   /**
    * Same thing as a `.tuple()` -> But takes the items as a args
    */
-  fixedArrayOf<T extends MongsterSchemaInternal<any>[]>(...items: T) {
+  fixedArrayOf<T extends MongsterSchemaInternal<any>[]>(...items: T): TupleSchema<T> {
     return new TupleSchema(items);
   }
   /**
    * An embedded document's schema representation
    * @param shape
    */
-  object<T extends Record<PropertyKey, MongsterSchemaInternal<any>>>(shape: T) {
+  object<T extends Record<PropertyKey, MongsterSchemaInternal<any>>>(shape: T): ObjectSchema<T> {
     return new ObjectSchema(shape);
   }
   /**
@@ -73,7 +73,7 @@ export class MongsterSchemaBuilder {
    * A collection's schema representation
    * @param shape
    */
-  schema<T extends Record<string, MongsterSchemaInternal<any>>>(shape: T) {
+  schema<T extends Record<string, MongsterSchemaInternal<any>>>(shape: T): MongsterSchema<T> {
     return new MongsterSchema(shape);
   }
 }

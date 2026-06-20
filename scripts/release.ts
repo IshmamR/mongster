@@ -152,18 +152,10 @@ async function runReleaseChecks() {
   console.log("✓ Prepublish checks passed");
 }
 
-async function publishPackage(tag: "latest" | "next") {
-  await $`npm whoami`.quiet();
-
-  if (tag === "next") {
-    await $`npm publish --access public --tag next`;
-  } else {
-    await $`npm publish --access public`;
-  }
-}
-
 async function main() {
-  console.log("🦖 Mongster Manual Release Script\n");
+  console.log("🦖 Mongster Release Prep Script\n");
+  console.log("This script bumps the version, commits, and tags locally.");
+  console.log("Publishing is handled by CI when the tag is pushed.\n");
 
   await ensureCleanGit();
 
@@ -195,7 +187,7 @@ async function main() {
   const action = await select({
     message: "What would you like to do?",
     choices: [
-      { name: `Release current version (${currentVersion})`, value: "current" },
+      { name: `Tag current version (${currentVersion})`, value: "current" },
       { name: "Bump to new version", value: "bump" },
       { name: "Enter custom version", value: "custom" },
       { name: "Cancel", value: "cancel" },
@@ -260,12 +252,12 @@ async function main() {
   console.log("\n📋 Release Summary:");
   console.log(`   Package: ${pkg.name}`);
   console.log(`   Version: ${releaseVersion}`);
-  console.log(`   npm tag: ${npmTag}`);
+  console.log(`   npm tag (CI will set this): ${npmTag}`);
   console.log(`   Git tag: v${releaseVersion}`);
   console.log();
 
   const shouldContinue = await confirm({
-    message: "Run checks, publish to npm, and create git tag now?",
+    message: "Run preflight checks, create tag, and push now?",
     default: true,
   });
 
@@ -275,11 +267,10 @@ async function main() {
   }
 
   await runReleaseChecks();
-  await publishPackage(npmTag as "latest" | "next");
   await createOrReplaceTag(releaseVersion);
 
   const shouldPushTag = await confirm({
-    message: `Push tag v${releaseVersion} to origin?`,
+    message: `Push tag v${releaseVersion} to origin? (This triggers CI publish)`,
     default: true,
   });
 
@@ -294,7 +285,7 @@ async function main() {
 
       if (!shouldDeleteRemote) {
         console.log(`📌 Skipping tag push. Remote tag ${tag} was kept.`);
-        console.log("✅ Manual release complete!");
+        console.log("✅ Release prep complete!");
         return;
       }
 
@@ -307,7 +298,7 @@ async function main() {
     console.log(`📌 Tag kept locally. Push manually with: git push origin v${releaseVersion}`);
   }
 
-  console.log("\n✅ Manual release complete!");
+  console.log("\n✅ Release prep complete! CI will publish on tag push.");
 }
 
 main().catch((error) => {
