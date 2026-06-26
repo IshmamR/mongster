@@ -6,5 +6,8 @@
   "exports": "./src/index.ts",
   "publish": {
     "include": ["src/**/*", "README.md", "LICENSE"]
+  },
+  "imports": {
+    "mongodb": "npm:mongodb@^7.0.0"
   }
 }
