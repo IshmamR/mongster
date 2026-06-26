@@ -15,10 +15,5 @@ export const UPDATE_KEY = {
   pullAll: "$pullAll",
   bit: "$bit",
 } as const;
-export const updateKeysArray = getArrayFromObjectValues(UPDATE_KEY);
-
-export function getArrayFromObjectValues<T extends Record<string | number, unknown>>(
-  obj: T,
-): T[keyof T][] {
-  return Object.values(obj) as [T[keyof T]];
-}
+export const updateKeysArray: (typeof UPDATE_KEY)[keyof typeof UPDATE_KEY][] =
+  Object.values(UPDATE_KEY);
