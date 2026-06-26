@@ -16,7 +16,7 @@ export {
   ValidationError,
 } from "./error";
 
-export const M = new MongsterSchemaBuilder();
+export const M: MongsterSchemaBuilder = new MongsterSchemaBuilder();
 export function defineSchema<T extends Record<string, MongsterSchemaInternal<any>>>(
   shape: T,
 ): MongsterSchema<T> {
@@ -28,7 +28,7 @@ export namespace M {
   export type inferInput<MS extends MongsterSchemaBase<any>> = InferSchemaInputType<MS>;
 }
 
-export const mongster = new MongsterClient();
+export const mongster: MongsterClient = new MongsterClient();
 
 export { AggregateQuery } from "./queries/AggregateQuery";
 export { MongsterClient };

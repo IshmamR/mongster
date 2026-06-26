@@ -142,11 +142,11 @@ export class FindOneQuery<
   }
 
   // biome-ignore lint/suspicious/noThenProperty: needed for thenable
-  then(resolve?: PromiseOnFulfilled<OT>, reject?: PromiseOnRejected) {
+  then(resolve?: PromiseOnFulfilled<OT>, reject?: PromiseOnRejected): Promise<OT | null> {
     return this.exec().then(resolve, reject);
   }
 
-  catch(reject: PromiseOnRejected) {
+  catch(reject: PromiseOnRejected): Promise<OT | null> {
     return this.exec().catch(reject);
   }
 }

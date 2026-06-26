@@ -19,7 +19,7 @@ interface MongsterClientOptions extends MongoClientOptions {
 
 export class MongsterClient {
   #uri: string | undefined;
-  #options: MongsterClientOptions = { autoIndex: true };
+  #options = { autoIndex: true } as MongsterClientOptions;
   #client: MongoClient | undefined;
   #dbName: string | undefined;
   #connected = false;
@@ -100,7 +100,7 @@ export class MongsterClient {
         if (retryAttempt >= maxAttempts) break;
 
         const jitter = Math.floor(Math.random() * 100);
-        await new Promise((r) => setTimeout(r, baseDelay + jitter));
+        await new Promise((r) => globalThis.setTimeout(r, baseDelay + jitter));
       }
     } while (!this.#connected && retryAttempt < maxAttempts);
 
@@ -109,7 +109,7 @@ export class MongsterClient {
   }
 
   async syncIndexes() {
-    const promises = this.#models.values().map((model) => model.syncIndexes().catch(() => {}));
+    const promises = this.#models.values().map((model) => model.syncIndexes().catch(() => { }));
     await Promise.all(promises);
   }
 
@@ -150,7 +150,7 @@ export class MongsterClient {
     return this.#client.db(name ?? this.#dbName ?? "test");
   }
 
-  getOptions() {
+  getOptions(): MongsterClientOptions {
     return this.#options;
   }
 }

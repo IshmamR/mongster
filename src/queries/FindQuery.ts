@@ -235,11 +235,11 @@ export class FindQuery<
   }
 
   // biome-ignore lint/suspicious/noThenProperty: cz I need it
-  then(resolve?: PromiseOnFulfilled<OT>, reject?: PromiseOnRejected) {
+  then(resolve?: PromiseOnFulfilled<OT>, reject?: PromiseOnRejected): Promise<OT[]> {
     return this.exec().then(resolve, reject);
   }
 
-  catch(reject: PromiseOnRejected) {
+  catch(reject: PromiseOnRejected): Promise<OT[]> {
     return this.exec().catch(reject);
   }
 

@@ -11,7 +11,8 @@ const MONGSTER_ERROR_CODE = {
   TRANSACTION: "transaction_error",
   INDEX_SYNC: "index_sync_error",
 } as const;
-const mongsterErrorCodes = Object.values(MONGSTER_ERROR_CODE);
+const mongsterErrorCodes: (typeof MONGSTER_ERROR_CODE)[keyof typeof MONGSTER_ERROR_CODE][] =
+  Object.values(MONGSTER_ERROR_CODE);
 export type MongsterErrorCode = (typeof mongsterErrorCodes)[number];
 
 /**

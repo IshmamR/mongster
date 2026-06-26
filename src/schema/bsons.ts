@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { Binary, Decimal128, ObjectId } from "mongodb";
 import { SchemaError } from "../error";
 import { MongsterSchemaInternal, WithDefaultSchema } from "./base";
@@ -158,7 +159,8 @@ const BSON_SUB_TYPE = {
   SUBTYPE_VECTOR: Binary.SUBTYPE_VECTOR,
   SUBTYPE_USER_DEFINED: Binary.SUBTYPE_USER_DEFINED,
 } as const;
-const bsonSubTypes = Object.values(BSON_SUB_TYPE);
+const bsonSubTypes: (typeof BSON_SUB_TYPE)[keyof typeof BSON_SUB_TYPE][] =
+  Object.values(BSON_SUB_TYPE);
 type BSONSubtype = (typeof bsonSubTypes)[number];
 
 function isValidBsonSubtype(x: unknown): x is BSONSubtype {

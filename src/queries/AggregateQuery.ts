@@ -185,11 +185,11 @@ export class AggregateQuery<Source extends Document, OT extends Document = Sourc
   }
 
   // biome-ignore lint/suspicious/noThenProperty: needed for thenable query builder
-  then(resolve?: PromiseOnFulfilled<OT>, reject?: PromiseOnRejected) {
+  then(resolve?: PromiseOnFulfilled<OT>, reject?: PromiseOnRejected): Promise<OT[]> {
     return this.exec().then(resolve, reject);
   }
 
-  catch(reject: PromiseOnRejected) {
+  catch(reject: PromiseOnRejected): Promise<OT[]> {
     return this.exec().catch(reject);
   }
 }
