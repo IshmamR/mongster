@@ -15,4 +15,5 @@ export const UPDATE_KEY = {
   pullAll: "$pullAll",
   bit: "$bit",
 } as const;
-export const updateKeysArray = Object.values(UPDATE_KEY);
+export const updateKeysArray: (typeof UPDATE_KEY)[keyof typeof UPDATE_KEY][] =
+  Object.values(UPDATE_KEY);

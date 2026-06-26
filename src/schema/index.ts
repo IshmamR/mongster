@@ -5,16 +5,16 @@ import { BooleanSchema, DateSchema, NumberSchema, StringSchema } from "./primiti
 import { MongsterSchema } from "./schema";
 
 export class MongsterSchemaBuilder {
-  number() {
+  number(): NumberSchema {
     return new NumberSchema();
   }
-  string() {
+  string(): StringSchema {
     return new StringSchema();
   }
-  boolean() {
+  boolean(): BooleanSchema {
     return new BooleanSchema();
   }
-  date() {
+  date(): DateSchema {
     return new DateSchema();
   }
   /**
@@ -41,31 +41,31 @@ export class MongsterSchemaBuilder {
    * An array, it's in the name...
    * @param item
    */
-  array<T extends MongsterSchemaInternal<any>>(item: T) {
+  array<T extends MongsterSchemaInternal<any>>(item: T): ArraySchema<T["$type"], T["$input"]> {
     return new ArraySchema<T["$type"], T["$input"]>(item);
   }
   /**
    * Use whatever mixture of types/shapes you want. Mongo does not care, why should we ?
    * @param shapes
    */
-  union<T extends MongsterSchemaInternal<any>[]>(...shapes: T) {
+  union<T extends MongsterSchemaInternal<any>[]>(...shapes: T): UnionSchema<T> {
     return new UnionSchema(shapes);
   }
   /**
    * Similar to `.union()` -> Only difference is it takes an array as param instead
    * @param shapes
    */
-  oneOf<T extends MongsterSchemaInternal<any>[]>(shapes: [...T]) {
+  oneOf<T extends MongsterSchemaInternal<any>[]>(shapes: [...T]): UnionSchema<[...T]> {
     return new UnionSchema(shapes);
   }
 
-  objectId() {
+  objectId(): ObjectIdSchema {
     return new ObjectIdSchema();
   }
-  decimal() {
+  decimal(): Decimal128Schema {
     return new Decimal128Schema();
   }
-  binary() {
+  binary(): BinarySchema {
     return new BinarySchema();
   }
 
