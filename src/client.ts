@@ -109,7 +109,7 @@ export class MongsterClient {
   }
 
   async syncIndexes() {
-    const promises = this.#models.values().map((model) => model.syncIndexes().catch(() => { }));
+    const promises = this.#models.values().map((model) => model.syncIndexes().catch(() => {}));
     await Promise.all(promises);
   }
 
