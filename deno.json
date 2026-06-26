@@ -1,4 +1,12 @@
 {
+  "$schema": "https://jsr.io/schema/config-file.v1.json",
+  "name": "@mongster/mongster",
+  "version": "0.3.3",
+  "license": "MIT",
+  "exports": "./src/index.ts",
+  "publish": {
+    "include": ["src/**/*", "README.md", "LICENSE"]
+  },
   "imports": {
     "mongodb": "npm:mongodb@^7.0.0"
   }
