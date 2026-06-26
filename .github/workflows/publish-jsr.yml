@@ -58,18 +58,18 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Tag: ${TAG} → Version: ${VERSION}"
 
-      - name: Verify tag matches jsr.json
+      - name: Verify tag matches deno.json
         if: github.event_name == 'release'
         env:
           TAG_VERSION: ${{ steps.tag.outputs.version }}
         run: |
           set -euo pipefail
-          PKG_VERSION=$(node -p "require('./jsr.json').version")
+          PKG_VERSION=$(node -p "require('./deno.json').version")
           if [ "${PKG_VERSION}" != "${TAG_VERSION}" ]; then
-            echo "::error::jsr.json version (${PKG_VERSION}) does not match tag version (${TAG_VERSION})"
+            echo "::error::deno.json version (${PKG_VERSION}) does not match tag version (${TAG_VERSION})"
             exit 1
           fi
-          echo "✓ jsr.json version (${PKG_VERSION}) matches tag"
+          echo "✓ deno.json version (${PKG_VERSION}) matches tag"
 
       - name: Lint
         run: bun run lint
